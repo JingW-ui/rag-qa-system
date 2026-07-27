@@ -1,0 +1,33 @@
+# 虚拟环境
+venv/
+
+# 运行时数据（ChromaDB + SQLite）
+data/
+
+# 🔒 配置文件（含 API Key，绝对不能提交）
+config.json
+
+# 测试用 API Key
+TEST_API_KEY.PY
+
+# Python
+__pycache__/
+*.pyc
+*.pyo
+*.egg-info/
+dist/
+build/
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
+
+# 日志
+logs/
+*.log
+
+# OS
+Thumbs.db
+.DS_Store

@@ -1,0 +1,67 @@
+{
+  "version": "1.0",
+  "app": {
+    "chunk_size": 800,
+    "chunk_overlap": 120,
+    "chunk_method": "recursive",
+    "top_k_retrieval": 5,
+    "data_dir": "./data",
+    "log_level": "INFO"
+  },
+  "model_providers": [
+    {
+      "id": "maas-default",
+      "name": "Alibaba Cloud MaaS (Default)",
+      "provider_type": "openai_compatible",
+      "base_url": "https://ws-89hfoshdoxq8ybc0.cn-beijing.maas.aliyuncs.com/compatible-mode/v1",
+      "api_key": "YOUR_API_KEY_HERE",
+      "chat_models": [
+        {
+          "model_name": "qwen3.7-plus",
+          "display_name": "Qwen 3.7 Plus",
+          "is_default": true
+        }
+      ],
+      "embedding_models": [
+        {
+          "model_name": "text-embedding-v4",
+          "display_name": "Text Embedding v4",
+          "is_default": true,
+          "dimensions": 1024
+        }
+      ],
+      "enabled": true
+    },
+    {
+      "id": "ollama-local",
+      "name": "Ollama Local",
+      "provider_type": "ollama",
+      "base_url": "http://localhost:11434/v1",
+      "api_key": "ollama",
+      "chat_models": [
+        {
+          "model_name": "qwen2.5:7b",
+          "display_name": "Qwen 2.5 7B (Local)",
+          "is_default": false
+        }
+      ],
+      "embedding_models": [
+        {
+          "model_name": "nomic-embed-text",
+          "display_name": "Nomic Embed Text",
+          "is_default": false,
+          "dimensions": 768
+        }
+      ],
+      "enabled": false
+    }
+  ],
+  "active_providers": {
+    "chat": "maas-default",
+    "embedding": "maas-default"
+  },
+  "active_models": {
+    "chat": "qwen3.7-plus",
+    "embedding": "text-embedding-v4"
+  }
+}
