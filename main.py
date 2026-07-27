@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 """
-RAG 问答系统 — 入口
+RAG_H — 入口
 """
 
 import sys

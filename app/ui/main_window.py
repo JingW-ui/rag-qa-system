@@ -22,7 +22,7 @@ from app.ui.settings_dialog import SettingsDialog
 
 
 class MainWindow(QMainWindow):
-    """RAG 问答系统主窗口。"""
+    """RAG_H 主窗口。"""
 
     def __init__(
         self,
@@ -47,7 +47,7 @@ class MainWindow(QMainWindow):
         self._setup_ui()
 
     def _setup_ui(self) -> None:
-        self.setWindowTitle("RAG 问答系统")
+        self.setWindowTitle("RAG_H")
         self.resize(1100, 700)
 
         # ---- 菜单栏 ----
@@ -66,7 +66,7 @@ class MainWindow(QMainWindow):
         # ---- 状态栏 ----
         self._status_bar = QStatusBar()
         self.setStatusBar(self._status_bar)
-        self._status_bar.showMessage("就绪")
+        self._status_bar.showMessage("就绪 — RAG_H")
 
         # ---- 中央 Splitter ----
         splitter = QSplitter(Qt.Horizontal)
@@ -122,9 +122,9 @@ class MainWindow(QMainWindow):
 
     def _show_about(self) -> None:
         QMessageBox.about(
-            self, "关于 RAG 问答系统",
-            "<h3>RAG 问答系统 v1.0</h3>"
-            "<p>基于 PySide6 + ChromaDB + 阿里云 MaaS</p>"
+            self, "关于 RAG_H",
+            "<h3>RAG_H v1.0</h3>"
+            "<p>基于 PySide6 + ChromaDB + 阿里云 MaaS 的 RAG 知识库问答系统</p>"
             "<p>支持 PDF / DOCX / Markdown 文档的知识库问答</p>",
         )
 
