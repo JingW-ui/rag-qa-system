@@ -68,36 +68,66 @@ class ChatPanel(QWidget):
         self._scroll.setWidget(self._msg_container)
         layout.addWidget(self._scroll, 1)
 
-        # ---- 输入区 ----
-        input_wrapper = QWidget()
-        input_wrapper.setStyleSheet("QWidget { background-color: #ffffff; border-top: 1px solid #e0e0e0; }")
-        input_layout = QHBoxLayout(input_wrapper)
-        input_layout.setContentsMargins(12, 10, 12, 10)
+        # ---- 输入区（按钮内嵌右下角） ----
+        self._input_wrapper = QWidget()
+        self._input_wrapper.setObjectName("inputWrapper")
+        self._input_wrapper.setStyleSheet("""
+            #inputWrapper {
+                background-color: #ffffff;
+                border: 1px solid #d0d0d0;
+                border-radius: 12px;
+            }
+            #inputWrapper:focus-within {
+                border-color: #4a90d9;
+            }
+        """)
+        wrapper_layout = QVBoxLayout(self._input_wrapper)
+        wrapper_layout.setContentsMargins(4, 4, 4, 4)
+        wrapper_layout.setSpacing(0)
 
         self._input = QTextEdit()
-        self._input.setPlaceholderText("输入问题，Ctrl+Enter 发送...")
+        self._input.setPlaceholderText("输入问题，Enter 发送，Shift+Enter 换行...")
         self._input.setMaximumHeight(120)
-        self._input.setMinimumHeight(44)
+        self._input.setMinimumHeight(60)
         self._input.setFont(QFont("Microsoft YaHei", 10))
+        self._input.setAcceptRichText(False)  # 纯文本，不支持 Markdown
         self._input.setStyleSheet("""
-            QTextEdit { border: 1px solid #d0d0d0; border-radius: 8px; padding: 8px 12px; background-color: #fafafa; }
-            QTextEdit:focus { border-color: #4a90d9; background-color: #ffffff; }
+            QTextEdit {
+                border: none;
+                background: transparent;
+                padding: 4px 40px 4px 8px;
+            }
         """)
         self._input.installEventFilter(self)
-        input_layout.addWidget(self._input)
+        wrapper_layout.addWidget(self._input)
 
-        self._send_btn = QPushButton("发 送")
+        # 发送按钮 — 绝对定位在右下角
+        self._send_btn = QPushButton("➤")
+        self._send_btn.setFixedSize(32, 32)
+        self._send_btn.setToolTip("发送 (Enter)")
         self._send_btn.clicked.connect(self._send)
-        self._send_btn.setMinimumWidth(72)
-        self._send_btn.setMinimumHeight(44)
         self._send_btn.setStyleSheet("""
-            QPushButton { background-color: #4a90d9; color: white; border: none; border-radius: 8px; font-size: 14px; font-weight: bold; padding: 0px 16px; }
-            QPushButton:hover { background-color: #357abd; }
-            QPushButton:disabled { background-color: #c0c0c0; }
+            QPushButton {
+                background-color: #4a90d9;
+                color: white;
+                border: none;
+                border-radius: 16px;
+                font-size: 16px;
+            }
+            QPushButton:hover {
+                background-color: #357abd;
+            }
+            QPushButton:disabled {
+                background-color: #c0c0c0;
+            }
         """)
-        input_layout.addWidget(self._send_btn)
+        self._send_btn.setParent(self._input_wrapper)
+        self._send_btn.move(0, 0)  # 位置由 resizeEvent 控制
 
-        layout.addWidget(input_wrapper)
+        outer_input_layout = QHBoxLayout()
+        outer_input_layout.setContentsMargins(12, 10, 12, 10)
+        outer_input_layout.addWidget(self._input_wrapper)
+        layout.addLayout(outer_input_layout)
 
         self._render_timer = QTimer(self)
         self._render_timer.setSingleShot(True)
@@ -105,10 +135,35 @@ class ChatPanel(QWidget):
 
     def eventFilter(self, obj, event) -> bool:
         if obj is self._input and event.type() == QEvent.KeyPress:
-            if event.key() == Qt.Key_Return and event.modifiers() & Qt.ControlModifier:
-                self._send()
-                return True
+            key = event.key()
+            mods = event.modifiers()
+            # Enter 发送，Shift+Enter 换行
+            if key == Qt.Key_Return or key == Qt.Key_Enter:
+                if mods & Qt.ShiftModifier:
+                    return False  # 允许换行
+                else:
+                    self._send()
+                    return True
         return super().eventFilter(obj, event)
+
+    def resizeEvent(self, event) -> None:
+        """窗口大小变化时重定位发送按钮到输入框右下角。"""
+        super().resizeEvent(event)
+        self._position_send_btn()
+
+    def showEvent(self, event) -> None:
+        super().showEvent(event)
+        self._position_send_btn()
+
+    def _position_send_btn(self) -> None:
+        """把发送按钮放在输入框右下角。"""
+        if hasattr(self, '_send_btn') and hasattr(self, '_input_wrapper'):
+            w = self._input_wrapper.width()
+            h = self._input_wrapper.height()
+            btn_w = self._send_btn.width()
+            btn_h = self._send_btn.height()
+            margin = 8
+            self._send_btn.move(w - btn_w - margin, h - btn_h - margin)
 
     # ------------------------------------------------------------------ #
     #  Public — 多 KB 管理

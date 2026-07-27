@@ -62,5 +62,14 @@ class QueryWorker(QThread):
                 self.finished.emit(True, "")
 
         except Exception as e:
-            self.error.emit(f"查询失败: {e}")
+            detail = str(e)
+            # 尝试提取 API 返回的详细错误
+            if hasattr(e, 'body') and e.body:
+                try:
+                    import json
+                    body = json.loads(e.body) if isinstance(e.body, str) else e.body
+                    detail = body.get('message', detail)
+                except Exception:
+                    pass
+            self.error.emit(f"{detail}")
             self.finished.emit(False, str(e))
