@@ -85,3 +85,15 @@ class DatabaseManager:
         """执行建表 DDL（幂等）。"""
         self.conn.executescript(SCHEMA_SQL)
         self.conn.commit()
+        # 迁移：兼容旧版 schema
+        self._migrate()
+
+    def _migrate(self) -> None:
+        """渐进式 schema 迁移 — 用 ALTER TABLE 补齐缺失列。"""
+        cur = self.conn.cursor()
+        # 检查 documents 表是否有 chunk_method 列
+        cur.execute("PRAGMA table_info(documents)")
+        cols = {r["name"] for r in cur.fetchall()}
+        if "chunk_method" not in cols:
+            cur.execute("ALTER TABLE documents ADD COLUMN chunk_method TEXT NOT NULL DEFAULT 'recursive'")
+            self.conn.commit()

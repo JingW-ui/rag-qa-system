@@ -98,14 +98,15 @@ class KnowledgeBaseManager:
         file_size: int,
         chunk_size: int,
         chunk_overlap: int,
+        chunk_method: str = "recursive",
     ) -> int:
         """添加文档记录，返回 doc_id。"""
         cur = self._db.conn.cursor()
         cur.execute(
             """INSERT INTO documents
-               (kb_id, filename, file_path, file_type, file_size, chunk_size, chunk_overlap, status)
-               VALUES (?, ?, ?, ?, ?, ?, ?, 'pending')""",
-            (kb_id, filename, file_path, file_type, file_size, chunk_size, chunk_overlap),
+               (kb_id, filename, file_path, file_type, file_size, chunk_size, chunk_overlap, chunk_method, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending')""",
+            (kb_id, filename, file_path, file_type, file_size, chunk_size, chunk_overlap, chunk_method),
         )
         self._db.conn.commit()
         return cur.lastrowid

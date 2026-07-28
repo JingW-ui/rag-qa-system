@@ -20,6 +20,7 @@ from app.core.document_processor import DocumentProcessor
 from app.ui.widgets.file_list_widget import FileListWidget
 from app.ui.workers.ingest_worker import IngestWorker
 from app.ui.workers.delete_worker import DeleteWorker
+from app.ui.dialogs.chunk_preview_dialog import ChunkPreviewDialog
 
 
 class KbPanel(QWidget):
@@ -252,12 +253,53 @@ class KbPanel(QWidget):
         )
         if not file_path:
             return
+
+        # 选择入库方式 — 使用自定义按钮文字
+        msg_box = QMessageBox(self)
+        msg_box.setWindowTitle("入库方式")
+        msg_box.setText(f"请选择「{os.path.basename(file_path)}」的入库方式:")
+        msg_box.setInformativeText("快速入库 — 使用全局分块参数直接入库\n预览分块 — 预览并编辑分块结果后再入库")
+        msg_box.setIcon(QMessageBox.Question)
+        btn_quick = msg_box.addButton("⚡ 快速入库", QMessageBox.AcceptRole)
+        btn_preview = msg_box.addButton("🔍 预览分块", QMessageBox.ActionRole)
+        btn_cancel = msg_box.addButton("取消", QMessageBox.RejectRole)
+        msg_box.setDefaultButton(btn_quick)
+        msg_box.exec()
+
+        clicked = msg_box.clickedButton()
+        if clicked == btn_cancel or clicked is None:
+            return
+
+        if clicked == btn_quick:
+            # 快速入库 — 现有流程
+            self._start_ingest(file_path)
+        else:
+            # 预览分块 — 打开对话框
+            dialog = ChunkPreviewDialog(file_path, self._proc, self)
+            if dialog.exec():
+                chunks = dialog.get_chunks()
+                params = dialog.get_chunk_params()
+                # 临时覆盖 proc 的分块参数（记录到文档）
+                old_size, old_overlap, old_method = (
+                    self._proc.chunk_size, self._proc.chunk_overlap, self._proc.chunk_method
+                )
+                self._proc.chunk_size = params["chunk_size"]
+                self._proc.chunk_overlap = params["chunk_overlap"]
+                self._proc.chunk_method = params["chunk_method"]
+                self._start_ingest(file_path, manual_chunks=chunks)
+                self._proc.chunk_size = old_size
+                self._proc.chunk_overlap = old_overlap
+                self._proc.chunk_method = old_method
+
+    def _start_ingest(self, file_path: str, manual_chunks: list[str] | None = None) -> None:
+        """启动入库 worker。"""
         self.status_message.emit(f"开始入库: {os.path.basename(file_path)}")
         self._progress.setVisible(True)
         self._progress.setValue(0)
         self._ingest_worker = IngestWorker(
             kb_id=self._active_kb_id, file_path=file_path,
             kb_mgr=self._kb_mgr, vs=self._vs, emb_svc=self._emb_svc, proc=self._proc,
+            manual_chunks=manual_chunks,
         )
         self._ingest_worker.progress.connect(self._on_ingest_progress)
         self._ingest_worker.finished.connect(self._on_ingest_finished)
