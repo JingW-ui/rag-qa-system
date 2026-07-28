@@ -54,6 +54,36 @@ python main.py
 3. **关联对话** — 右键知识库 → "💬 添加到对话"
 4. **提问** — 右下输入框中输入问题，`Ctrl+Enter` 发送
 
+## 📦 打包为独立应用
+
+使用 PyInstaller 可将 RAG_H 打包为独立的 Windows 可执行文件，无需安装 Python 环境即可运行。
+
+### 打包（Windows）
+
+```bash
+# 确保虚拟环境已激活
+venv\Scripts\activate
+
+# 安装 PyInstaller
+pip install pyinstaller
+
+# 一键打包
+python do_build.py
+```
+
+打包完成后，可执行文件位于 `dist/RAG_H/RAG_H.exe`。
+
+### 打包参数说明
+
+| 参数 | 说明 |
+|------|------|
+| `--windowed` | 无控制台窗口（纯 GUI） |
+| `--onedir` | 目录模式（启动更快，便于调试） |
+| `--icon=assets/logo.ico` | 程序图标 |
+| `--collect-all chromadb` | 完整打包 ChromaDB 及其原生依赖 |
+
+> **提示**：如需制作安装包，可使用 [Inno Setup](https://jrsoftware.org/isinfo.php) 或 [NSIS](https://nsis.sourceforge.io/) 将 `dist/RAG_H/` 目录打包为安装程序。
+
 ## 🏗️ 技术栈
 
 | 技术 | 用途 |
