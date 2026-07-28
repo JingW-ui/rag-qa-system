@@ -7,6 +7,8 @@ from PySide6.QtWidgets import (
     QMainWindow, QSplitter, QMenuBar, QStatusBar, QMessageBox,
 )
 from PySide6.QtCore import Qt
+from PySide6.QtGui import QIcon
+import os
 
 from app.core.config import ConfigManager
 from app.core.database import DatabaseManager
@@ -48,6 +50,10 @@ class MainWindow(QMainWindow):
 
     def _setup_ui(self) -> None:
         self.setWindowTitle("RAG_H")
+        # 设置窗口图标
+        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets", "logo.ico")
+        if os.path.exists(icon_path):
+            self.setWindowIcon(QIcon(icon_path))
         self.resize(1100, 700)
 
         # ---- 菜单栏 ----
