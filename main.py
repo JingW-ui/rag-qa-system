@@ -11,7 +11,17 @@ PROJECT_ROOT = os.path.dirname(os.path.abspath(__file__))
 if PROJECT_ROOT not in sys.path:
     sys.path.insert(0, PROJECT_ROOT)
 
+import ctypes
+
 from PySide6.QtWidgets import QApplication
+from PySide6.QtGui import QIcon
+
+# Windows 任务栏：设置唯一的 appUserModelId，避免与 python.exe 混在一起
+if sys.platform == "win32":
+    try:
+        ctypes.windll.shell32.SetCurrentProcessExplicitAppUserModelID("rag-h.rag-qa-system.1.0")
+    except Exception:
+        pass
 
 from app.core.config import ConfigManager
 from app.core.database import DatabaseManager
@@ -27,6 +37,10 @@ from app.ui.main_window import MainWindow
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+    # 设置应用图标（任务栏 + 窗口标题栏）
+    logo_path = os.path.join(PROJECT_ROOT, "assets", "logo.ico")
+    if os.path.exists(logo_path):
+        app.setWindowIcon(QIcon(logo_path))
 
     # 1. 加载配置
     config = ConfigManager(
