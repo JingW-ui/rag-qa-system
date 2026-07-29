@@ -24,6 +24,9 @@ build/
 *.swp
 *.swo
 
+# Claude Code
+.claude/
+
 # 日志
 logs/
 *.log
