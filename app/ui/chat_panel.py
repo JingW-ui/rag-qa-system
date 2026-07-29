@@ -4,8 +4,8 @@
 """
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton,
-    QScrollArea, QLabel, QFrame, QFileDialog, QApplication,
+    QWidget, QVBoxLayout, QHBoxLayout, QTextEdit,
+    QLabel, QFrame, QFileDialog, QApplication,
 )
 from PySide6.QtCore import Qt, Signal, QTimer, QEvent
 from PySide6.QtGui import QFont, QPixmap, QKeySequence
@@ -22,6 +22,7 @@ from app.ui.theme import (
     BUBBLE_MAX_WIDTH, tag_style,
 )
 from app.utils.image_utils import prepare_image, prepare_image_from_bytes
+from app.ui.fluent import ToolButton, PrimaryButton, SmoothScrollArea
 
 
 class ChatPanel(QWidget):
@@ -65,11 +66,11 @@ class ChatPanel(QWidget):
         self._kb_tags_layout.addStretch()
         layout.addWidget(self._kb_tags_container)
 
-        # ---- 消息滚动区 ----
-        self._scroll = QScrollArea()
+        # ---- 消息滚动区（Fluent 平滑滚动） ----
+        self._scroll = SmoothScrollArea()
         self._scroll.setWidgetResizable(True)
         self._scroll.setStyleSheet(
-            f"QScrollArea {{ border: none; background-color: {CHAT_BG}; }}"
+            f"SmoothScrollArea {{ border: none; background-color: {CHAT_BG}; }}"
         )
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
@@ -131,48 +132,28 @@ class ChatPanel(QWidget):
         toolbar.setContentsMargins(8, 4, 8, 4)
         toolbar.setSpacing(6)
 
-        self._attach_btn = QPushButton("📎")
-        self._attach_btn.setFixedSize(28, 28)
+        self._attach_btn = ToolButton("📎")
         self._attach_btn.setToolTip("附加图片")
-        self._attach_btn.setCursor(Qt.PointingHandCursor)
-        self._attach_btn.setStyleSheet("""
-            QPushButton {
-                background-color: transparent;
-                border: none;
-                border-radius: 6px;
-                font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: rgba(0, 0, 0, 0.05);
-            }
-        """)
         self._attach_btn.clicked.connect(self._on_attach_clicked)
+        self._attach_btn.setStyleSheet("font-size: 16px;")
         toolbar.addWidget(self._attach_btn)
         toolbar.addStretch()
         wrapper_layout.addLayout(toolbar)
 
         # 发送按钮 — 绝对定位在右下角
-        self._send_btn = QPushButton("➤")
+        self._send_btn = PrimaryButton("→")
         self._send_btn.setFixedSize(SEND_BTN_SIZE, SEND_BTN_SIZE)
         self._send_btn.setToolTip("发送 (Enter)")
         self._send_btn.clicked.connect(self._send)
-        self._send_btn.setStyleSheet(f"""
-            QPushButton {{
-                background-color: {SEND_BTN_BG};
-                color: {SEND_BTN_COLOR};
-                border: none;
-                border-radius: {SEND_BTN_SIZE // 2}px;
+        self._send_btn.setStyleSheet("""
+            PrimaryButton {
                 font-size: 16px;
-            }}
-            QPushButton:hover {{
-                background-color: {SEND_BTN_BG_HOVER};
-            }}
-            QPushButton:disabled {{
-                background-color: {SEND_BTN_BG_DISABLED};
-            }}
+                padding: 0;
+                border-radius: 16px;
+            }
         """)
         self._send_btn.setParent(self._input_wrapper)
-        self._send_btn.move(0, 0)  # 位置由 resizeEvent 控制
+        self._send_btn.move(0, 0)
 
         # 启用拖放
         self._input_wrapper.setAcceptDrops(True)

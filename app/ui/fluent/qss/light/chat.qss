@@ -1,0 +1,19 @@
+/* Chat — 浅色主题 */
+#chatContainer {
+    background-color: #f0f2f5;
+}
+
+#inputWrapper {
+    background-color: #ffffff;
+    border: 1px solid #d0d0d0;
+    border-radius: 8px;
+}
+
+#inputWrapper:focus-within {
+    border-color: #0078d4;
+}
+
+#chatTags {
+    background-color: #fafafa;
+    border-bottom: 1px solid #e8e8e8;
+}

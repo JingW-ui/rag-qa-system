@@ -1,0 +1,28 @@
+/* Cards — 深色主题 */
+#CardWidget {
+    background-color: #2d2d2d;
+    border: 1px solid #404040;
+    border-radius: 6px;
+}
+
+#SettingCardGroup {
+    background: transparent;
+}
+
+#SettingCard {
+    background-color: #2d2d2d;
+    border: none;
+    border-bottom: 1px solid #383838;
+    padding: 12px 16px;
+}
+
+#SettingCard #cardTitle {
+    color: #e0e0e0;
+    font-size: 14px;
+    font-weight: 500;
+}
+
+#SettingCard #cardDescription {
+    color: #999999;
+    font-size: 11px;
+}

@@ -1,0 +1,52 @@
+/* Buttons — 浅色主题 */
+/* PrimaryButton */
+#PrimaryButton {
+    background-color: #0078d4;
+    color: #ffffff;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 20px;
+    font-size: 13px;
+    font-weight: 500;
+}
+#PrimaryButton:hover {
+    background-color: #106ebe;
+}
+#PrimaryButton:pressed {
+    background-color: #005a9e;
+}
+#PrimaryButton:disabled {
+    background-color: #c0c0c0;
+    color: #888888;
+}
+
+/* ToolButton */
+#ToolButton {
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 6px;
+    color: #333333;
+}
+#ToolButton:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+#ToolButton:pressed {
+    background-color: rgba(0, 0, 0, 0.10);
+}
+
+/* TransparentButton */
+#TransparentButton {
+    background: transparent;
+    border: none;
+    border-radius: 4px;
+    padding: 6px 12px;
+    color: #333333;
+    font-size: 13px;
+}
+#TransparentButton:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+#TransparentButton:pressed {
+    background-color: rgba(0, 0, 0, 0.10);
+}

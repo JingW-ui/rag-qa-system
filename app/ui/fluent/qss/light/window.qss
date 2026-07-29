@@ -1,0 +1,33 @@
+/* FluentWindow — 浅色主题 */
+#fluentWindow {
+    background-color: #f3f3f3;
+}
+
+#titleBar {
+    background-color: #ffffff;
+    border-bottom: 1px solid #e0e0e0;
+}
+
+#titleBar QLabel {
+    color: #1a1a1a;
+}
+
+/* 标题栏按钮 */
+#titleBar QPushButton {
+    background: transparent;
+    border: none;
+    border-radius: 0px;
+    color: #333333;
+    font-size: 14px;
+    padding: 0px 16px;
+}
+#titleBar QPushButton:hover {
+    background-color: rgba(0, 0, 0, 0.06);
+}
+#titleBar QPushButton:pressed {
+    background-color: rgba(0, 0, 0, 0.10);
+}
+#titleBar #closeBtn:hover {
+    background-color: #d13438;
+    color: #ffffff;
+}

@@ -1,0 +1,23 @@
+/* Navigation — 浅色主题 */
+#navigationInterface {
+    background-color: #fafafa;
+    border-right: 1px solid #e0e0e0;
+}
+
+#navItem {
+    background: transparent;
+    border: none;
+    border-radius: 0px;
+    padding: 10px 16px;
+    text-align: left;
+    color: #1a1a1a;
+    font-size: 13px;
+}
+#navItem:hover {
+    background-color: rgba(0, 0, 0, 0.04);
+}
+#navItem[active="true"] {
+    background-color: rgba(0, 120, 212, 0.08);
+    border-left: 3px solid #0078d4;
+    font-weight: 600;
+}

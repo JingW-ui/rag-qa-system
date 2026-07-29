@@ -1,11 +1,13 @@
 # -*- coding: utf-8 -*-
 """
-主窗口 — 整合侧边栏 + 对话面板。
+主窗口 — FluentWindow 框架 + 传统左右分栏布局
+=============================================
+左侧 KbPanel（知识库列表 + 文档管理）
+右侧 ChatPanel（对话 + 消息输入）
+两者始终同时可见，保持 RAG 应用的正确工作流。
 """
 
-from PySide6.QtWidgets import (
-    QMainWindow, QSplitter, QMenuBar, QStatusBar, QMessageBox,
-)
+from PySide6.QtWidgets import QSplitter, QMessageBox
 from PySide6.QtCore import Qt
 from PySide6.QtGui import QIcon
 import os
@@ -22,9 +24,15 @@ from app.ui.kb_panel import KbPanel
 from app.ui.chat_panel import ChatPanel
 from app.ui.settings_dialog import SettingsDialog
 
+from app.ui.fluent import (
+    FluentWindow,
+    show_info, show_success, show_warning, show_error,
+    info_bar_mgr, theme_manager, is_dark_theme,
+)
 
-class MainWindow(QMainWindow):
-    """RAG_H 主窗口。"""
+
+class MainWindow(FluentWindow):
+    """RAG_H 主窗口 — Fluent 标题栏 + 导航, 内容区左右分栏"""
 
     def __init__(
         self,
@@ -46,93 +54,151 @@ class MainWindow(QMainWindow):
         self._vs = vs
         self._emb_svc = emb_svc
         self._rag = rag
-        self._setup_ui()
 
-    def _setup_ui(self) -> None:
-        self.setWindowTitle("RAG_H")
-        # 设置窗口图标
-        icon_path = os.path.join(os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))), "assets", "logo.ico")
+        # 窗口标题和图标
+        self.set_title("RAG_H")
+        icon_path = os.path.join(
+            os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__)))),
+            "assets", "logo.ico"
+        )
         if os.path.exists(icon_path):
             self.setWindowIcon(QIcon(icon_path))
+            self.titleBar.set_icon(QIcon(icon_path).pixmap(18, 18))
+
         self.resize(1100, 700)
 
-        # ---- 菜单栏 ----
-        menubar = self.menuBar()
-        file_menu = menubar.addMenu("文件(&F)")
-        settings_action = file_menu.addAction("设置(&S)...")
-        settings_action.triggered.connect(self._open_settings)
-        file_menu.addSeparator()
-        exit_action = file_menu.addAction("退出(&Q)")
-        exit_action.triggered.connect(self.close)
+        # 核心面板（独立于导航页面，直接放内容区）
+        self._setup_content()
 
-        help_menu = menubar.addMenu("帮助(&H)")
-        about_action = help_menu.addAction("关于(&A)")
-        about_action.triggered.connect(self._show_about)
+        # 导航与信号
+        self._setup_navigation()
+        self._connect_signals()
 
-        # ---- 状态栏 ----
-        self._status_bar = QStatusBar()
-        self.setStatusBar(self._status_bar)
-        self._status_bar.showMessage("就绪 — RAG_H")
+        # InfoBar
+        info_bar_mgr.set_parent(self)
+        theme_manager.themeChanged.connect(self._on_theme_change_info_bar)
 
-        # ---- 中央 Splitter ----
-        splitter = QSplitter(Qt.Horizontal)
+    def _on_theme_change_info_bar(self, _theme_value: str):
+        info_bar_mgr.set_dark_mode(is_dark_theme())
 
-        # 左侧：知识库面板
+    # ------------------------------------------------------------------ #
+    #  内容区主布局：QSplitter 左右分栏
+    # ------------------------------------------------------------------ #
+
+    def _setup_content(self):
+        """创建左右分栏内容区，替换 stackedWidget 中的默认页面"""
+        # 创建 KbPanel + ChatPanel
         self._kb_panel = KbPanel(
             kb_mgr=self._kb_mgr,
             vs=self._vs,
             emb_svc=self._emb_svc,
             proc=self._proc,
         )
-        self._kb_panel.kb_changed.connect(self._on_kb_changed)
-        self._kb_panel.chat_kbs_changed.connect(self._on_chat_kbs_changed)
-        self._kb_panel.status_message.connect(self._status_bar.showMessage)
-        self._kb_panel.setMinimumWidth(260)
+        self._kb_panel.status_message.connect(self._on_status_msg)
+        self._kb_panel.setMinimumWidth(240)
         self._kb_panel.setMaximumWidth(400)
+
+        self._chat_panel = ChatPanel(
+            rag=self._rag,
+            top_k=self._config.app_settings["top_k_retrieval"],
+        )
+        self._chat_panel.status_message.connect(self._on_status_msg)
+
+        # QSplitter 并排放置
+        splitter = QSplitter(Qt.Horizontal)
         splitter.addWidget(self._kb_panel)
-
-        # 右侧：对话面板
-        self._chat_panel = ChatPanel(rag=self._rag, top_k=self._config.app_settings["top_k_retrieval"])
-        self._chat_panel.status_message.connect(self._status_bar.showMessage)
         splitter.addWidget(self._chat_panel)
-
         splitter.setStretchFactor(0, 0)
         splitter.setStretchFactor(1, 1)
         splitter.setSizes([280, 820])
 
-        self.setCentralWidget(splitter)
+        # 将 splitter 放入 stackedWidget 的第一个（也是唯一一个）页面
+        # 先清掉默认的空页面
+        while self.stackedWidget.count() > 0:
+            w = self.stackedWidget.widget(0)
+            self.stackedWidget.removeWidget(w)
+
+        self._content_widget = splitter
+        self._content_widget.setObjectName("mainContent")
+        self.stackedWidget.addWidget(self._content_widget)
 
     # ------------------------------------------------------------------ #
-    #  Slots
+    #  导航
     # ------------------------------------------------------------------ #
+
+    def _setup_navigation(self):
+        """左侧导航：对话（默认选中）+ 设置（底部）"""
+        # 导航项 — 点击不做页面切换，但保持高亮反馈
+        kb_item = self.navigation.add_item("library", "知识库")
+        kb_item.clicked.connect(lambda: self._focus_kb_panel())
+
+        chat_item = self.navigation.add_item("chat", "对话")
+        chat_item.clicked.connect(lambda: self._focus_chat_panel())
+
+        # 默认选中对话
+        self.navigation.set_current_item(chat_item)
+
+        # 底部
+        self.navigation.add_stretch()
+        settings_item = self.navigation.add_item("settings", "设置", is_bottom=True)
+        settings_item.clicked.connect(self._open_settings)
+
+    def _focus_kb_panel(self):
+        """聚焦到知识库区域"""
+        self._kb_panel.setFocus()
+        show_info("知识库面板", duration=1500)
+
+    def _focus_chat_panel(self):
+        """聚焦到对话区域"""
+        self._chat_panel.setFocus()
+        show_info("对话面板", duration=1500)
+
+    # ------------------------------------------------------------------ #
+    #  信号
+    # ------------------------------------------------------------------ #
+
+    def _connect_signals(self):
+        self._kb_panel.kb_changed.connect(self._on_kb_changed)
+        self._kb_panel.chat_kbs_changed.connect(self._on_chat_kbs_changed)
 
     def _on_kb_changed(self, kb_id: int, collection_name: str) -> None:
-        """左侧选中浏览 KB 变化 — 仅用于文档列表展示，不影响对话。"""
-        pass  # 文档列表刷新由 KbPanel 内部处理
+        pass
 
     def _on_chat_kbs_changed(self, collections: list, names: list) -> None:
-        """对话关联 KB 变化 → 聊天面板多库检索。"""
         self._chat_panel.set_collections(collections, names)
 
-    def _open_settings(self) -> None:
+    # ------------------------------------------------------------------ #
+    #  Status → InfoBar
+    # ------------------------------------------------------------------ #
+
+    def _on_status_msg(self, msg: str):
+        if not msg:
+            return
+        if msg.startswith("❌") or msg.startswith("错误"):
+            show_error(msg)
+        elif msg.startswith("⚠") or msg.startswith("警告"):
+            show_warning(msg)
+        elif msg.startswith("✅") or msg.startswith("就绪"):
+            if "错误" not in msg:
+                show_success(msg)
+            else:
+                show_error(msg)
+        else:
+            show_info(msg, duration=3000)
+
+    # ------------------------------------------------------------------ #
+    #  Dialogs
+    # ------------------------------------------------------------------ #
+
+    def _open_settings(self):
         dialog = SettingsDialog(self._config, self._registry, self)
         if dialog.exec():
-            # 用户点确认 — 更新 UI 中的活跃参数
-            self._chat_panel.set_collection(self._kb_panel.active_collection)
-            self.statusBar().showMessage("设置已保存，新模型已生效")
-            # 更新文档处理器参数
             app_s = self._config.app_settings
+            self._chat_panel.set_collection(self._kb_panel.active_collection)
+            show_success("设置已保存")
             self._proc.chunk_size = app_s["chunk_size"]
             self._proc.chunk_overlap = app_s["chunk_overlap"]
             self._proc.chunk_method = app_s["chunk_method"]
-
-    def _show_about(self) -> None:
-        QMessageBox.about(
-            self, "关于 RAG_H",
-            "<h3>RAG_H v1.0</h3>"
-            "<p>基于 PySide6 + ChromaDB + 阿里云 MaaS 的 RAG 知识库问答系统</p>"
-            "<p>支持 PDF / DOCX / Markdown 文档的知识库问答</p>",
-        )
 
     # ------------------------------------------------------------------ #
     #  Lifecycle

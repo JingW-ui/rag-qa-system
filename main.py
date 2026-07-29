@@ -32,11 +32,15 @@ from app.core.kb_manager import KnowledgeBaseManager
 from app.core.document_processor import DocumentProcessor
 from app.core.rag_pipeline import RAGPipeline
 from app.ui.main_window import MainWindow
+from app.ui.fluent import theme_manager, Theme, is_dark_theme
 
 
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+
+    # 初始化主题：自动跟随系统
+    theme_manager.set_theme(Theme.AUTO)
     # 设置应用图标（任务栏 + 窗口标题栏）
     logo_path = os.path.join(PROJECT_ROOT, "assets", "logo.ico")
     if os.path.exists(logo_path):
