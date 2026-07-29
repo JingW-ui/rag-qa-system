@@ -1,7 +1,13 @@
 {
   "permissions": {
     "allow": [
-      "Bash(./venv/Scripts/pip install *)"
+      "Bash(./venv/Scripts/pip install *)",
+      "mcp__pycharm__list_directory_tree",
+      "Bash(./venv/Scripts/python.exe -c \"import sys; print\\(f'Python {sys.version}'\\)\")",
+      "Bash(./venv/Scripts/python.exe -c \"import PySide6; print\\(f'PySide6 {PySide6.__version__}'\\)\")",
+      "Bash(./venv/Scripts/python.exe -c \"import chromadb; print\\(f'ChromaDB {chromadb.__version__}'\\)\")",
+      "Bash(./venv/Scripts/python.exe -c \"import json; c=json.load\\(open\\('config.json'\\)\\); print\\('Providers:', len\\(c.get\\('model_providers',[]\\)\\)\\); [print\\(f'  {p[\\\\\"id\\\\\"]}: {p.get\\(\\\\\"base_url\\\\\",\\\\\"?\\\\\"\\)[:50]}'\\) for p in c.get\\('model_providers',[]\\)]\")",
+      "Bash(./venv/Scripts/python.exe main.py)"
     ]
   }
 }

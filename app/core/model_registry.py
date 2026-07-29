@@ -55,6 +55,7 @@ class ModelRegistry:
                 enabled=p_dict.get("enabled", True),
                 chat_models=p_dict.get("chat_models", []),
                 embedding_models=p_dict.get("embedding_models", []),
+                embedding_batch_size=p_dict.get("embedding_batch_size", 10),
             )
             self._providers[provider_config.id] = cls(provider_config)
 

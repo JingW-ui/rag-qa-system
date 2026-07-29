@@ -13,6 +13,13 @@ from PySide6.QtGui import QFont
 from app.core.rag_pipeline import RAGPipeline
 from app.ui.widgets.message_bubble import MessageBubble
 from app.ui.workers.query_worker import QueryWorker
+from app.ui.theme import (
+    CHAT_BG, MSG_SPACING, MSG_MARGIN_H, MSG_MARGIN_V,
+    INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS, INPUT_RADIUS,
+    SEND_BTN_BG, SEND_BTN_BG_HOVER, SEND_BTN_BG_DISABLED, SEND_BTN_COLOR, SEND_BTN_SIZE,
+    TAG_BAR_BG, TAG_BAR_BORDER, FONT_FAMILY, FONT_SIZE_SM, FONT_SIZE_NORMAL,
+    BUBBLE_MAX_WIDTH, tag_style,
+)
 
 
 class ChatPanel(QWidget):
@@ -42,12 +49,14 @@ class ChatPanel(QWidget):
 
         # ---- 已关联知识库标签栏 ----
         self._kb_tags_container = QWidget()
-        self._kb_tags_container.setStyleSheet("background-color: #fafafa; border-bottom: 1px solid #e8e8e8;")
+        self._kb_tags_container.setStyleSheet(
+            f"background-color: {TAG_BAR_BG}; border-bottom: 1px solid {TAG_BAR_BORDER};"
+        )
         self._kb_tags_layout = QHBoxLayout(self._kb_tags_container)
         self._kb_tags_layout.setContentsMargins(10, 6, 10, 6)
         self._kb_tags_layout.setSpacing(6)
         self._kb_tags_hint = QLabel('<span style="color:#999;">未关联知识库 — 请在左侧知识库上右键「添加到对话」</span>')
-        self._kb_tags_hint.setFont(QFont("Microsoft YaHei", 9))
+        self._kb_tags_hint.setFont(QFont(FONT_FAMILY, FONT_SIZE_SM))
         self._kb_tags_layout.addWidget(self._kb_tags_hint)
         self._kb_tags_layout.addStretch()
         layout.addWidget(self._kb_tags_container)
@@ -55,15 +64,17 @@ class ChatPanel(QWidget):
         # ---- 消息滚动区 ----
         self._scroll = QScrollArea()
         self._scroll.setWidgetResizable(True)
-        self._scroll.setStyleSheet("QScrollArea { border: none; background-color: #f5f5f5; }")
+        self._scroll.setStyleSheet(
+            f"QScrollArea {{ border: none; background-color: {CHAT_BG}; }}"
+        )
         self._scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAlwaysOff)
 
         self._msg_container = QWidget()
         self._msg_container.setObjectName("msgContainer")
-        self._msg_container.setStyleSheet("#msgContainer { background-color: #f5f5f5; }")
+        self._msg_container.setStyleSheet(f"#msgContainer {{ background-color: {CHAT_BG}; }}")
         self._msg_layout = QVBoxLayout(self._msg_container)
-        self._msg_layout.setContentsMargins(8, 12, 8, 12)
-        self._msg_layout.setSpacing(6)
+        self._msg_layout.setContentsMargins(MSG_MARGIN_H, MSG_MARGIN_V, MSG_MARGIN_H, MSG_MARGIN_V)
+        self._msg_layout.setSpacing(MSG_SPACING)
         self._msg_layout.addStretch()
         self._scroll.setWidget(self._msg_container)
         layout.addWidget(self._scroll, 1)
@@ -71,15 +82,15 @@ class ChatPanel(QWidget):
         # ---- 输入区（按钮内嵌右下角） ----
         self._input_wrapper = QWidget()
         self._input_wrapper.setObjectName("inputWrapper")
-        self._input_wrapper.setStyleSheet("""
-            #inputWrapper {
-                background-color: #ffffff;
-                border: 1px solid #d0d0d0;
-                border-radius: 12px;
-            }
-            #inputWrapper:focus-within {
-                border-color: #4a90d9;
-            }
+        self._input_wrapper.setStyleSheet(f"""
+            #inputWrapper {{
+                background-color: {INPUT_BG};
+                border: 1px solid {INPUT_BORDER};
+                border-radius: {INPUT_RADIUS}px;
+            }}
+            #inputWrapper:focus-within {{
+                border-color: {INPUT_BORDER_FOCUS};
+            }}
         """)
         wrapper_layout = QVBoxLayout(self._input_wrapper)
         wrapper_layout.setContentsMargins(4, 4, 4, 4)
@@ -89,7 +100,7 @@ class ChatPanel(QWidget):
         self._input.setPlaceholderText("输入问题，Enter 发送，Shift+Enter 换行...")
         self._input.setMaximumHeight(120)
         self._input.setMinimumHeight(60)
-        self._input.setFont(QFont("Microsoft YaHei", 10))
+        self._input.setFont(QFont(FONT_FAMILY, FONT_SIZE_NORMAL))
         self._input.setAcceptRichText(False)  # 纯文本，不支持 Markdown
         self._input.setStyleSheet("""
             QTextEdit {
@@ -103,23 +114,23 @@ class ChatPanel(QWidget):
 
         # 发送按钮 — 绝对定位在右下角
         self._send_btn = QPushButton("➤")
-        self._send_btn.setFixedSize(32, 32)
+        self._send_btn.setFixedSize(SEND_BTN_SIZE, SEND_BTN_SIZE)
         self._send_btn.setToolTip("发送 (Enter)")
         self._send_btn.clicked.connect(self._send)
-        self._send_btn.setStyleSheet("""
-            QPushButton {
-                background-color: #4a90d9;
-                color: white;
+        self._send_btn.setStyleSheet(f"""
+            QPushButton {{
+                background-color: {SEND_BTN_BG};
+                color: {SEND_BTN_COLOR};
                 border: none;
-                border-radius: 16px;
+                border-radius: {SEND_BTN_SIZE // 2}px;
                 font-size: 16px;
-            }
-            QPushButton:hover {
-                background-color: #357abd;
-            }
-            QPushButton:disabled {
-                background-color: #c0c0c0;
-            }
+            }}
+            QPushButton:hover {{
+                background-color: {SEND_BTN_BG_HOVER};
+            }}
+            QPushButton:disabled {{
+                background-color: {SEND_BTN_BG_DISABLED};
+            }}
         """)
         self._send_btn.setParent(self._input_wrapper)
         self._send_btn.move(0, 0)  # 位置由 resizeEvent 控制
@@ -177,20 +188,14 @@ class ChatPanel(QWidget):
         if kb_names:
             for name in kb_names:
                 tag = QLabel(f"📚 {name}")
-                tag.setFont(QFont("Microsoft YaHei", 9))
-                tag.setStyleSheet("""
-                    QLabel {
-                        background-color: #e8f4fd; color: #2a7ab5;
-                        border: 1px solid #b8d8f0; border-radius: 10px;
-                        padding: 3px 10px;
-                    }
-                """)
+                tag.setFont(QFont(FONT_FAMILY, FONT_SIZE_SM))
+                tag.setStyleSheet(tag_style())
                 self._kb_tags_layout.addWidget(tag)
             self._kb_tags_layout.addStretch()
             self._kb_tags_hint.setVisible(False)
         else:
             self._kb_tags_hint = QLabel('<span style="color:#999;">未关联知识库 — 请在左侧知识库上右键「添加到对话」</span>')
-            self._kb_tags_hint.setFont(QFont("Microsoft YaHei", 9))
+            self._kb_tags_hint.setFont(QFont(FONT_FAMILY, FONT_SIZE_SM))
             self._kb_tags_layout.addWidget(self._kb_tags_hint)
             self._kb_tags_layout.addStretch()
 
@@ -279,7 +284,7 @@ class ChatPanel(QWidget):
     # ------------------------------------------------------------------ #
 
     def _add_bubble(self, text: str, is_user: bool) -> MessageBubble:
-        bubble = MessageBubble(text, is_user)
+        bubble = MessageBubble(text, is_user, max_width=BUBBLE_MAX_WIDTH)
         self._msg_layout.insertWidget(self._msg_layout.count() - 1, bubble)
         QTimer.singleShot(50, self._scroll_to_bottom)
         return bubble

@@ -30,6 +30,7 @@
           "dimensions": 1024
         }
       ],
+      "embedding_batch_size": 10,
       "enabled": true
     },
     {
@@ -53,6 +54,7 @@
           "dimensions": 768
         }
       ],
+      "embedding_batch_size": 32,
       "enabled": false
     }
   ],

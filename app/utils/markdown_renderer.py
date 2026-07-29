@@ -7,67 +7,69 @@ import re
 import markdown
 from markdown.extensions import fenced_code, tables, codehilite
 
+from app.ui.theme import CODE_BG, CODE_FONT, PRE_BG, PRE_COLOR, PRE_RADIUS, FONT_SIZE_CODE
+
 
 # 聊天气泡内使用的 CSS（内联在 <style> 中）
-BUBBLE_CSS = """
+BUBBLE_CSS = f"""
 <style>
-body { margin: 0; font-size: 14px; line-height: 1.6; }
-code {
-    background-color: rgba(0,0,0,0.08);
+body {{ margin: 0; padding: 0; font-size: 14px; line-height: 1.6; }}
+code {{
+    background-color: {CODE_BG};
     padding: 2px 5px;
     border-radius: 3px;
-    font-family: 'Consolas', 'Courier New', monospace;
-    font-size: 13px;
-}
-pre {
-    background-color: #1e1e1e;
-    color: #d4d4d4;
+    font-family: {CODE_FONT};
+    font-size: {FONT_SIZE_CODE}px;
+}}
+pre {{
+    background-color: {PRE_BG};
+    color: {PRE_COLOR};
     padding: 12px 16px;
-    border-radius: 6px;
+    border-radius: {PRE_RADIUS}px;
     overflow-x: auto;
-    font-family: 'Consolas', 'Courier New', monospace;
-    font-size: 13px;
+    font-family: {CODE_FONT};
+    font-size: {FONT_SIZE_CODE}px;
     line-height: 1.5;
     margin: 8px 0;
-}
-pre code {
+}}
+pre code {{
     background: none;
     padding: 0;
     color: inherit;
     font-size: inherit;
-}
-table {
+}}
+table {{
     border-collapse: collapse;
     margin: 8px 0;
     font-size: 13px;
-}
-th, td {
+}}
+th, td {{
     border: 1px solid #d0d0d0;
     padding: 6px 12px;
     text-align: left;
-}
-th {
+}}
+th {{
     background-color: #f5f5f5;
     font-weight: bold;
-}
-blockquote {
+}}
+blockquote {{
     border-left: 3px solid #4a90d9;
     padding-left: 12px;
     margin: 8px 0;
     color: #555;
-}
-ul, ol { margin: 4px 0; padding-left: 24px; }
-li { margin: 2px 0; }
-h1, h2, h3, h4 { margin: 8px 0 4px; }
-h1 { font-size: 18px; }
-h2 { font-size: 16px; border-bottom: 1px solid #e0e0e0; }
-h3 { font-size: 15px; }
-h4 { font-size: 14px; }
-a { color: #4a90d9; }
-hr { border: none; border-top: 1px solid #e0e0e0; margin: 12px 0; }
-p { margin: 4px 0; }
-strong { font-weight: bold; }
-em { font-style: italic; }
+}}
+ul, ol {{ margin: 4px 0; padding-left: 24px; }}
+li {{ margin: 2px 0; }}
+h1, h2, h3, h4 {{ margin: 8px 0 4px; }}
+h1 {{ font-size: 18px; }}
+h2 {{ font-size: 16px; border-bottom: 1px solid #e0e0e0; }}
+h3 {{ font-size: 15px; }}
+h4 {{ font-size: 14px; }}
+a {{ color: #4a90d9; }}
+hr {{ border: none; border-top: 1px solid #e0e0e0; margin: 12px 0; }}
+p {{ margin: 2px 0 0 0; }}
+strong {{ font-weight: bold; }}
+em {{ font-style: italic; }}
 </style>
 """
 

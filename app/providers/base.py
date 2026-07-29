@@ -19,6 +19,7 @@ class ProviderConfig:
     enabled: bool
     chat_models: list[dict] = field(default_factory=list)
     embedding_models: list[dict] = field(default_factory=list)
+    embedding_batch_size: int = 10
 
 
 @dataclass
