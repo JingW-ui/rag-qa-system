@@ -248,7 +248,7 @@ class KbPanel(QWidget):
             return
         file_path, _ = QFileDialog.getOpenFileName(
             self, "选择文档", "",
-            "文档文件 (*.pdf *.docx *.md *.txt);;所有文件 (*.*)"
+            "文档文件 (*.pdf *.docx *.md *.txt *.json *.jsonl);;所有文件 (*.*)"
         )
         if not file_path:
             return

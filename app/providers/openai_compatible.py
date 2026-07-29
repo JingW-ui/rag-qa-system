@@ -14,6 +14,7 @@ from .base import (
     ChatMessage,
     EmbeddingResult,
 )
+from app.utils.image_utils import bytes_to_base64_url
 
 
 class OpenAICompatibleProvider(BaseProvider, ChatProvider, EmbeddingProvider):
@@ -40,9 +41,11 @@ class OpenAICompatibleProvider(BaseProvider, ChatProvider, EmbeddingProvider):
         stream: bool = False,
         **kwargs
     ) -> str | Iterator[str]:
+        # 将 ChatMessage 列表转为 API 格式（支持多模态）
+        api_messages = [self._to_api_message(m) for m in messages]
         response = self._client.chat.completions.create(
             model=model,
-            messages=[{"role": m.role, "content": m.content} for m in messages],
+            messages=api_messages,
             stream=stream,
             **kwargs,
         )
@@ -85,6 +88,24 @@ class OpenAICompatibleProvider(BaseProvider, ChatProvider, EmbeddingProvider):
     # ------------------------------------------------------------------ #
     #  Internal
     # ------------------------------------------------------------------ #
+
+    def _to_api_message(self, msg: ChatMessage) -> dict:
+        """将 ChatMessage 转为 OpenAI API 格式（支持多模态）。"""
+        if msg.images:
+            # 多模态：content 是 list[dict]
+            content_parts = []
+            if msg.content:
+                content_parts.append({"type": "text", "text": msg.content})
+            for img_bytes in msg.images:
+                url = bytes_to_base64_url(img_bytes)
+                content_parts.append({
+                    "type": "image_url",
+                    "image_url": {"url": url},
+                })
+            return {"role": msg.role, "content": content_parts}
+        else:
+            # 纯文本
+            return {"role": msg.role, "content": msg.content}
 
     def _stream_generator(self, response) -> Iterator[str]:
         for chunk in response:

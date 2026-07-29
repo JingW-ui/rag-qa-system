@@ -47,11 +47,12 @@ class IngestWorker(QThread):
 
             # 1. 创建文档记录
             self.progress.emit(5, "创建文档记录...")
+            valid_types = ("pdf", "docx", "md", "txt", "json", "jsonl")
             doc_id = self._kb_mgr.add_document(
                 kb_id=self._kb_id,
                 filename=filename,
                 file_path=self._file_path,
-                file_type=ext if ext in ("pdf", "docx", "md") else "md",
+                file_type=ext if ext in valid_types else "md",
                 file_size=file_size,
                 chunk_size=self._proc.chunk_size,
                 chunk_overlap=self._proc.chunk_overlap,

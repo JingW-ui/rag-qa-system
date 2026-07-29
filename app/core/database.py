@@ -22,7 +22,7 @@ CREATE TABLE IF NOT EXISTS documents (
     kb_id         INTEGER NOT NULL,
     filename      TEXT    NOT NULL,
     file_path     TEXT    NOT NULL,
-    file_type     TEXT    NOT NULL CHECK(file_type IN ('pdf', 'docx', 'md')),
+    file_type     TEXT    NOT NULL CHECK(file_type IN ('pdf', 'docx', 'md', 'txt', 'json', 'jsonl')),
     file_size     INTEGER DEFAULT 0,
     chunk_count   INTEGER DEFAULT 0,
     chunk_size    INTEGER DEFAULT 0,

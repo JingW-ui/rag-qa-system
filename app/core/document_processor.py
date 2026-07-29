@@ -4,17 +4,18 @@
 """
 
 import os
+import json
 from typing import Optional
 
 from app.utils.chunker import chunk_text
 from app.utils.text_cleaner import clean_text
 
 
-SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".md", ".txt", ".markdown"}
+SUPPORTED_EXTENSIONS = {".pdf", ".docx", ".md", ".txt", ".markdown", ".json", ".jsonl"}
 
 
 class DocumentProcessor:
-    """解析 PDF/DOCX/MD/TXT，返回纯文本，支持分块。"""
+    """解析 PDF/DOCX/MD/TXT/JSON/JSONL，返回纯文本，支持分块。"""
 
     def __init__(
         self,
@@ -47,6 +48,10 @@ class DocumentProcessor:
             raw = self._parse_docx(file_path)
         elif ext in (".md", ".markdown", ".txt"):
             raw = self._parse_text(file_path)
+        elif ext == ".json":
+            raw = self._parse_json(file_path)
+        elif ext == ".jsonl":
+            raw = self._parse_jsonl(file_path)
         else:
             raise ValueError(f"未实现的解析器: {ext}")
 
@@ -111,3 +116,105 @@ class DocumentProcessor:
     def _parse_text(file_path: str) -> str:
         with open(file_path, "r", encoding="utf-8") as f:
             return f.read()
+
+    # ------------------------------------------------------------------ #
+    #  JSON / JSONL 解析
+    # ------------------------------------------------------------------ #
+
+    @staticmethod
+    def _parse_json(file_path: str) -> str:
+        """解析 JSON 文件 — 自动判断 Array / Object 模式。
+
+        - Array [...]  → 逐条扁平化（结构化数据模式）
+        - Object {...} → pretty-print（配置/文档模式）
+        """
+        with open(file_path, "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if isinstance(data, list):
+            return DocumentProcessor._flatten_json_array(data)
+        elif isinstance(data, dict):
+            return DocumentProcessor._flatten_json_object(data)
+        else:
+            # 基础类型（string/number/bool）直接转字符串
+            return str(data)
+
+    @staticmethod
+    def _parse_jsonl(file_path: str) -> str:
+        """解析 JSONL 文件 — 每行一个 JSON 对象，逐条扁平化。"""
+        lines: list[str] = []
+        with open(file_path, "r", encoding="utf-8") as f:
+            for line in f:
+                line = line.strip()
+                if not line:
+                    continue
+                try:
+                    obj = json.loads(line)
+                    lines.append(DocumentProcessor._obj_to_flat_text(obj))
+                except json.JSONDecodeError:
+                    continue  # 跳过无效行
+        return "\n".join(lines)
+
+    # ---- JSON 转换辅助 ----
+
+    @staticmethod
+    def _flatten_json_array(data: list) -> str:
+        """Array 模式：每条记录转成一行扁平文本。"""
+        lines: list[str] = []
+        for item in data:
+            lines.append(DocumentProcessor._obj_to_flat_text(item))
+        return "\n".join(lines)
+
+    @staticmethod
+    def _flatten_json_object(data: dict, indent: int = 0) -> str:
+        """Object 模式：保留层级结构的 pretty-print。"""
+        return DocumentProcessor._dict_to_indented(data, indent=0)
+
+    @staticmethod
+    def _obj_to_flat_text(obj) -> str:
+        """将单个对象扁平化为 'key: value | key: value' 格式。"""
+        if isinstance(obj, dict):
+            parts: list[str] = []
+            for k, v in obj.items():
+                val_str = DocumentProcessor._value_to_str(v)
+                parts.append(f"{k}: {val_str}")
+            return " | ".join(parts)
+        elif isinstance(obj, list):
+            return ", ".join(DocumentProcessor._value_to_str(x) for x in obj)
+        else:
+            return str(obj)
+
+    @staticmethod
+    def _dict_to_indented(data: dict, indent: int = 0) -> str:
+        """递归缩进输出嵌套 dict。"""
+        prefix = "  " * indent
+        lines: list[str] = []
+        for k, v in data.items():
+            if isinstance(v, dict):
+                lines.append(f"{prefix}{k}:")
+                lines.append(DocumentProcessor._dict_to_indented(v, indent + 1))
+            elif isinstance(v, list):
+                lines.append(f"{prefix}{k}:")
+                for item in v:
+                    lines.append(f"{prefix}  - {DocumentProcessor._value_to_str(item)}")
+            else:
+                lines.append(f"{prefix}{k}: {DocumentProcessor._value_to_str(v)}")
+        return "\n".join(lines)
+
+    @staticmethod
+    def _value_to_str(v) -> str:
+        """将值转为紧凑字符串。"""
+        if v is None:
+            return ""
+        if isinstance(v, bool):
+            return str(v).lower()
+        if isinstance(v, (int, float)):
+            return str(v)
+        if isinstance(v, str):
+            return v
+        if isinstance(v, list):
+            return ", ".join(DocumentProcessor._value_to_str(x) for x in v)
+        if isinstance(v, dict):
+            # 嵌套 dict 在扁平模式下用 JSON 紧凑表示
+            return json.dumps(v, ensure_ascii=False, separators=(",", ":"))
+        return str(v)

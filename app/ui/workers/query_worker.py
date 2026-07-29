@@ -24,6 +24,7 @@ class QueryWorker(QThread):
         rag: RAGPipeline,
         top_k: int = 5,
         stream: bool = True,
+        images: list[bytes] | None = None,
         parent=None,
     ):
         super().__init__(parent)
@@ -32,32 +33,31 @@ class QueryWorker(QThread):
         self._rag = rag
         self._top_k = top_k
         self._stream = stream
+        self._images = images
 
     def run(self) -> None:
         try:
-            # 检索上下文（用于展示来源）
-            contexts = self._rag.get_retrieved_contexts(
-                self._collections, self._question, self._top_k
-            )
-            self.context_retrieved.emit(contexts)
-
             if self._stream:
-                gen = self._rag.query_multi(
+                gen, contexts = self._rag.query_multi_with_contexts(
                     self._collections,
                     self._question,
                     top_k=self._top_k,
                     stream=True,
+                    images=self._images,
                 )
+                self.context_retrieved.emit(contexts)
                 for token in gen:
                     self.token_generated.emit(token)
                 self.finished.emit(True, "")
             else:
-                answer = self._rag.query_multi(
+                answer, contexts = self._rag.query_multi_with_contexts(
                     self._collections,
                     self._question,
                     top_k=self._top_k,
                     stream=False,
+                    images=self._images,
                 )
+                self.context_retrieved.emit(contexts)
                 self.response_ready.emit(answer)
                 self.finished.emit(True, "")
 

@@ -28,6 +28,7 @@ class ModelRegistry:
         self._active_embedding_provider_id: str = ""
         self._active_chat_model: str = ""
         self._active_embedding_model: str = ""
+        self._vision_models: list[tuple[str, str]] = []  # (provider_id, model_name)
         self._load_from_config(config_dict)
 
     # ------------------------------------------------------------------ #
@@ -58,6 +59,10 @@ class ModelRegistry:
                 embedding_batch_size=p_dict.get("embedding_batch_size", 10),
             )
             self._providers[provider_config.id] = cls(provider_config)
+            # 收集 vision 模型
+            for m in provider_config.chat_models:
+                if m.get("is_vision"):
+                    self._vision_models.append((provider_config.id, m["model_name"]))
 
         # 设置活跃项
         ap = config_dict.get("active_providers", {})
@@ -70,6 +75,7 @@ class ModelRegistry:
     def reload_config(self, config_dict: dict) -> None:
         """热重载（设置面板保存后调用）。"""
         self._providers.clear()
+        self._vision_models.clear()
         self._load_from_config(config_dict)
 
     # ------------------------------------------------------------------ #
@@ -127,3 +133,26 @@ class ModelRegistry:
     def set_active_embedding(self, provider_id: str, model_name: str) -> None:
         self._active_embedding_provider_id = provider_id
         self._active_embedding_model = model_name
+
+    # ------------------------------------------------------------------ #
+    #  Vision model support
+    # ------------------------------------------------------------------ #
+
+    def get_vision_model(self) -> tuple[ChatProvider | None, str]:
+        """返回可用的 vision 模型 (provider, model_name)。
+
+        优先返回已配置的 vision 模型，如果没有则返回 None。
+        用于自动切换：当用户上传图片时，自动使用 vision 模型而非当前 chat 模型。
+        """
+        if not self._vision_models:
+            return None, ""
+        provider_id, model_name = self._vision_models[0]
+        p = self._providers.get(provider_id)
+        if p is None or not isinstance(p, ChatProvider):
+            return None, ""
+        return p, model_name
+
+    @property
+    def has_vision_model(self) -> bool:
+        """是否配置了 vision 模型。"""
+        return len(self._vision_models) > 0

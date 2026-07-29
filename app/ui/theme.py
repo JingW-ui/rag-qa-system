@@ -115,3 +115,43 @@ def tag_style() -> str:
             padding: 3px 10px;
         }}
     """
+
+
+# ============================================================
+#  引用来源卡片
+# ============================================================
+
+SOURCE_CARD_BG = "#f7f9fc"
+SOURCE_CARD_BORDER = "#e0e4ea"
+SOURCE_CARD_RADIUS = 8
+SOURCE_BTN_COLOR = "#4a90d9"
+SOURCE_SCORE_COLOR = "#7c8db5"
+SOURCE_PREVIEW_COLOR = "#555555"
+
+
+def source_card_style() -> str:
+    """分块卡片 QSS。"""
+    return f"""
+        QFrame {{
+            background-color: {SOURCE_CARD_BG};
+            border: 1px solid {SOURCE_CARD_BORDER};
+            border-radius: {SOURCE_CARD_RADIUS}px;
+            padding: 8px;
+        }}
+    """
+
+
+def source_btn_style() -> str:
+    """引用来源按钮 QSS。"""
+    return f"""
+        QPushButton {{
+            background-color: transparent;
+            color: {SOURCE_BTN_COLOR};
+            border: none;
+            padding: 4px 0px;
+            text-align: left;
+        }}
+        QPushButton:hover {{
+            text-decoration: underline;
+        }}
+    """

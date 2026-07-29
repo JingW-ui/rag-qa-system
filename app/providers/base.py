@@ -26,6 +26,7 @@ class ProviderConfig:
 class ChatMessage:
     role: str      # "user" | "assistant" | "system"
     content: str
+    images: list[bytes] | None = None  # 多模态：图片字节数据列表（JPEG）
 
 
 @dataclass

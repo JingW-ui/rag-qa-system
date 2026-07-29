@@ -16,6 +16,8 @@ from app.ui.theme import (
     SHADOW_RADIUS, SHADOW_OFFSET,
     bubble_style,
 )
+from app.ui.widgets.sources_section import SourcesSection
+from app.ui.widgets.image_thumb import ImageThumb
 
 
 def _make_shadow(parent: QWidget) -> QGraphicsDropShadowEffect:
@@ -30,11 +32,13 @@ def _make_shadow(parent: QWidget) -> QGraphicsDropShadowEffect:
 class MessageBubble(QFrame):
     """单条聊天气泡，支持 Markdown 渲染 + 流式追加。"""
 
-    def __init__(self, text: str = "", is_user: bool = False, max_width: int = BUBBLE_MAX_WIDTH, parent=None):
+    def __init__(self, text: str = "", is_user: bool = False, max_width: int = BUBBLE_MAX_WIDTH, images: list[bytes] | None = None, parent=None):
         super().__init__(parent)
         self._is_user = is_user
         self._raw_text = text
         self._max_width = max_width
+        self._sources_section: SourcesSection | None = None
+        self._images = images
         self._setup_ui()
 
     # ------------------------------------------------------------------ #
@@ -57,11 +61,25 @@ class MessageBubble(QFrame):
         self._content.setGraphicsEffect(_make_shadow(self._content))
 
         content_layout = QVBoxLayout(self._content)
+        self._content_layout = content_layout
         content_layout.setContentsMargins(
             BUBBLE_PADDING_H, BUBBLE_PADDING_TOP,
             BUBBLE_PADDING_H, BUBBLE_PADDING_BOTTOM
         )
-        content_layout.setSpacing(0)
+        content_layout.setSpacing(8)
+
+        # 用户气泡图片缩略图行
+        if self._is_user and self._images:
+            thumbs_widget = QWidget()
+            thumbs_widget.setStyleSheet("background: transparent; border: none;")
+            thumbs_layout = QHBoxLayout(thumbs_widget)
+            thumbs_layout.setContentsMargins(0, 0, 0, 0)
+            thumbs_layout.setSpacing(6)
+            for img_bytes in self._images:
+                thumb = ImageThumb(img_bytes, removable=False, size=120)
+                thumbs_layout.addWidget(thumb)
+            thumbs_layout.addStretch()
+            content_layout.addWidget(thumbs_widget)
 
         # Markdown 文本标签
         self._label = QLabel()
@@ -110,6 +128,16 @@ class MessageBubble(QFrame):
     @property
     def raw_text(self) -> str:
         return self._raw_text
+
+    def set_sources(self, contexts: list[dict]) -> None:
+        """AI 回答完成后，附加引用来源卡片（仅 AI 气泡）。"""
+        if self._is_user or not contexts:
+            return
+        if self._sources_section is None:
+            self._sources_section = SourcesSection(contexts, parent=self._content)
+            self._content_layout.addWidget(self._sources_section)
+        else:
+            self._sources_section.set_contexts(contexts)
 
     # ------------------------------------------------------------------ #
     #  Internal
