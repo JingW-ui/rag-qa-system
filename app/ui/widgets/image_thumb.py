@@ -1,26 +1,34 @@
 # -*- coding: utf-8 -*-
 """
-图片缩略图组件 — 显示在输入区或用户气泡中，支持删除。
+图片缩略图组件 — 显示在输入区或用户气泡中，支持删除和大图预览。
 """
 
-from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QLabel
-from PySide6.QtCore import Qt, Signal, QSize
+from PySide6.QtWidgets import QFrame, QHBoxLayout, QPushButton, QLabel, QVBoxLayout
+from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QPixmap
 
 
 class ImageThumb(QFrame):
-    """单个图片缩略图，纯图片显示，无边框。"""
+    """单个图片缩略图，纯图片显示，无边框，支持灵活尺寸。"""
 
     remove_clicked = Signal(object)  # 点击删除时 emit 自身
+    clicked = Signal(bytes)  # 点击图片时 emit 图片字节数据
 
-    DEFAULT_SIZE = 64
-    DELETE_BTN_SIZE = 18
+    DELETE_BTN_SIZE = 20
 
-    def __init__(self, image_bytes: bytes, removable: bool = True, size: int = DEFAULT_SIZE, parent=None):
+    def __init__(
+        self,
+        image_bytes: bytes,
+        removable: bool = True,
+        max_width: int = 64,
+        max_height: int = 64,
+        parent=None,
+    ):
         super().__init__(parent)
         self._image_bytes = image_bytes
         self._removable = removable
-        self._thumb_size = size
+        self._max_width = max_width
+        self._max_height = max_height
         self._setup_ui()
 
     def _setup_ui(self) -> None:
@@ -34,22 +42,26 @@ class ImageThumb(QFrame):
 
         # 图片标签
         self._pixmap_label = QLabel()
+        self._pixmap_label.setCursor(Qt.PointingHandCursor)
         pixmap = QPixmap()
         pixmap.loadFromData(self._image_bytes)
+
         if not pixmap.isNull():
-            w, h = pixmap.width(), pixmap.height()
-            if w > self._thumb_size or h > self._thumb_size:
-                # 大图：等比例缩小
-                pixmap = pixmap.scaled(
-                    self._thumb_size, self._thumb_size,
-                    Qt.KeepAspectRatio, Qt.SmoothTransformation
-                )
-            # 小图：保持原始尺寸，不放大
-            self._pixmap_label.setPixmap(pixmap)
-        self._pixmap_label.setFixedSize(self._thumb_size, self._thumb_size)
+            # 等比例缩放到 max_width × max_height 范围内
+            scaled = pixmap.scaled(
+                self._max_width,
+                self._max_height,
+                Qt.KeepAspectRatio,
+                Qt.SmoothTransformation,
+            )
+            self._pixmap_label.setPixmap(scaled)
+            self._pixmap_label.setFixedSize(scaled.size())
+        else:
+            self._pixmap_label.setFixedSize(self._max_width, self._max_height)
+
         self._pixmap_label.setAlignment(Qt.AlignCenter)
 
-        layout = QHBoxLayout(self)
+        layout = QVBoxLayout(self)
         layout.setContentsMargins(0, 0, 0, 0)
         layout.setSpacing(0)
         layout.addWidget(self._pixmap_label)
@@ -63,7 +75,7 @@ class ImageThumb(QFrame):
                     background-color: rgba(0, 0, 0, 0.6);
                     color: white;
                     border: none;
-                    border-radius: 9px;
+                    border-radius: 10px;
                     font-size: 11px;
                     font-weight: bold;
                 }
@@ -73,11 +85,22 @@ class ImageThumb(QFrame):
             """)
             self._delete_btn.clicked.connect(self._on_remove)
             self._delete_btn.setParent(self)
-            # 定位到右上角
-            self._delete_btn.move(
-                self._thumb_size - self.DELETE_BTN_SIZE - 2, 2
-            )
-            self._delete_btn.raise_()  # 确保在最上层
+            # 定位到右上角（延迟到 showEvent 获取实际尺寸）
+            self._delete_btn.raise_()
+
+    def showEvent(self, event) -> None:
+        """显示时重新定位删除按钮到实际图片右上角。"""
+        super().showEvent(event)
+        if self._removable and hasattr(self, '_delete_btn'):
+            img_w = self._pixmap_label.width()
+            self._delete_btn.move(img_w - self.DELETE_BTN_SIZE - 2, 2)
+
+    def mousePressEvent(self, event) -> None:
+        """点击图片触发预览。"""
+        if event.button() == Qt.LeftButton and not self._removable:
+            # 只在非可删除模式（气泡中）触发预览
+            self.clicked.emit(self._image_bytes)
+        super().mousePressEvent(event)
 
     def _on_remove(self) -> None:
         self.remove_clicked.emit(self)

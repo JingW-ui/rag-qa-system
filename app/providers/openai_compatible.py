@@ -3,6 +3,7 @@
 OpenAI 兼容供应商 — 统一 MaaS、Ollama 等所有 OpenAI-compatible API。
 """
 
+import requests
 from openai import OpenAI
 from typing import Iterator
 
@@ -10,14 +11,16 @@ from .base import (
     BaseProvider,
     ChatProvider,
     EmbeddingProvider,
+    RerankProvider,
     ProviderConfig,
     ChatMessage,
     EmbeddingResult,
+    RerankResult,
 )
 from app.utils.image_utils import bytes_to_base64_url
 
 
-class OpenAICompatibleProvider(BaseProvider, ChatProvider, EmbeddingProvider):
+class OpenAICompatibleProvider(BaseProvider, ChatProvider, EmbeddingProvider, RerankProvider):
     """
     使用 openai Python SDK 统一接入所有 OpenAI 兼容接口。
     MaaS (阿里云) 和 Ollama 均可使用该类。
@@ -72,6 +75,67 @@ class OpenAICompatibleProvider(BaseProvider, ChatProvider, EmbeddingProvider):
 
     def list_embedding_models(self) -> list[str]:
         return [m.get("model_name", "") for m in self._config.embedding_models]
+
+    # ------------------------------------------------------------------ #
+    #  Rerank
+    # ------------------------------------------------------------------ #
+
+    def rerank(
+        self,
+        query: str,
+        documents: list[str],
+        model: str,
+        top_n: int | None = None,
+    ) -> RerankResult:
+        """调用阿里云 gte-rerank API 进行精排。
+
+        阿里云 rerank 使用独立 endpoint，不走 OpenAI SDK。
+        """
+        # 从 base_url 推断 rerank endpoint
+        # base_url 通常是 https://xxx/compatible-mode/v1
+        base = self._config.base_url.rstrip("/")
+        if base.endswith("/v1"):
+            rerank_url = base[:-3] + "/services/rerank/text-rerank/text-rerank"
+        elif base.endswith("/compatible-mode"):
+            rerank_url = base + "/v1/services/rerank/text-rerank/text-rerank"
+        else:
+            rerank_url = base + "/services/rerank/text-rerank/text-rerank"
+
+        payload = {
+            "model": model,
+            "input": {
+                "query": query,
+                "documents": documents,
+            },
+            "parameters": {
+                "return_documents": False,
+            },
+        }
+        if top_n is not None:
+            payload["parameters"]["top_n"] = top_n
+
+        headers = {
+            "Authorization": f"Bearer {self._config.api_key}",
+            "Content-Type": "application/json",
+        }
+
+        resp = requests.post(rerank_url, json=payload, headers=headers, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+
+        # 解析结果：阿里云返回 {"output": {"results": [{"index": int, "relevance_score": float}, ...]}}
+        output = data.get("output", {})
+        raw_results = output.get("results", [])
+
+        results = [
+            (r["index"], r["relevance_score"])
+            for r in sorted(raw_results, key=lambda x: x["relevance_score"], reverse=True)
+        ]
+
+        return RerankResult(model=model, results=results)
+
+    def list_rerank_models(self) -> list[str]:
+        return [m.get("model_name", "") for m in self._config.rerank_models]
 
     # ------------------------------------------------------------------ #
     #  Connectivity

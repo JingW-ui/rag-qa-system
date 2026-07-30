@@ -19,6 +19,7 @@ class ProviderConfig:
     enabled: bool
     chat_models: list[dict] = field(default_factory=list)
     embedding_models: list[dict] = field(default_factory=list)
+    rerank_models: list[dict] = field(default_factory=list)
     embedding_batch_size: int = 10
 
 
@@ -87,4 +88,39 @@ class EmbeddingProvider(ABC):
 
     @abstractmethod
     def list_embedding_models(self) -> list[str]:
+        ...
+
+
+@dataclass
+class RerankResult:
+    """重排结果：(原始索引, 相关性分数) 列表，按分数降序。"""
+    model: str
+    results: list[tuple[int, float]]  # [(original_index, relevance_score), ...]
+
+
+class RerankProvider(ABC):
+    """能对 (query, documents) 做精排打分的供应商。"""
+
+    @abstractmethod
+    def rerank(
+        self,
+        query: str,
+        documents: list[str],
+        model: str,
+        top_n: int | None = None,
+    ) -> RerankResult:
+        """
+        Args:
+            query: 用户问题。
+            documents: 候选文档文本列表。
+            model: 重排模型名。
+            top_n: 返回前 N 个结果，None 则返回全部。
+
+        Returns:
+            RerankResult，results 按 relevance_score 降序排列。
+        """
+        ...
+
+    @abstractmethod
+    def list_rerank_models(self) -> list[str]:
         ...

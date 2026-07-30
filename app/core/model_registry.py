@@ -7,6 +7,7 @@ from app.providers.base import (
     BaseProvider,
     ChatProvider,
     EmbeddingProvider,
+    RerankProvider,
     ProviderConfig,
 )
 from app.providers.openai_compatible import OpenAICompatibleProvider
@@ -26,8 +27,12 @@ class ModelRegistry:
         self._providers: dict[str, BaseProvider] = {}
         self._active_chat_provider_id: str = ""
         self._active_embedding_provider_id: str = ""
+        self._active_vision_provider_id: str = ""
+        self._active_rerank_provider_id: str = ""
         self._active_chat_model: str = ""
         self._active_embedding_model: str = ""
+        self._active_vision_model: str = ""
+        self._active_rerank_model: str = ""
         self._vision_models: list[tuple[str, str]] = []  # (provider_id, model_name)
         self._load_from_config(config_dict)
 
@@ -56,6 +61,7 @@ class ModelRegistry:
                 enabled=p_dict.get("enabled", True),
                 chat_models=p_dict.get("chat_models", []),
                 embedding_models=p_dict.get("embedding_models", []),
+                rerank_models=p_dict.get("rerank_models", []),
                 embedding_batch_size=p_dict.get("embedding_batch_size", 10),
             )
             self._providers[provider_config.id] = cls(provider_config)
@@ -69,8 +75,12 @@ class ModelRegistry:
         am = config_dict.get("active_models", {})
         self._active_chat_provider_id = ap.get("chat", "")
         self._active_embedding_provider_id = ap.get("embedding", "")
+        self._active_vision_provider_id = ap.get("vision", "")
+        self._active_rerank_provider_id = ap.get("rerank", "")
         self._active_chat_model = am.get("chat", "")
         self._active_embedding_model = am.get("embedding", "")
+        self._active_vision_model = am.get("vision", "")
+        self._active_rerank_model = am.get("rerank", "")
 
     def reload_config(self, config_dict: dict) -> None:
         """热重载（设置面板保存后调用）。"""
@@ -97,6 +107,15 @@ class ModelRegistry:
         if p is None:
             return None
         if not isinstance(p, EmbeddingProvider):
+            return None
+        return p
+
+    def get_rerank_provider(self) -> RerankProvider | None:
+        """返回当前活跃的 Rerank 供应商。"""
+        p = self._providers.get(self._active_rerank_provider_id)
+        if p is None:
+            return None
+        if not isinstance(p, RerankProvider):
             return None
         return p
 
@@ -134,6 +153,30 @@ class ModelRegistry:
         self._active_embedding_provider_id = provider_id
         self._active_embedding_model = model_name
 
+    def set_active_vision(self, provider_id: str, model_name: str) -> None:
+        self._active_vision_provider_id = provider_id
+        self._active_vision_model = model_name
+
+    @property
+    def active_vision_model(self) -> str:
+        return self._active_vision_model
+
+    @property
+    def active_vision_provider_id(self) -> str:
+        return self._active_vision_provider_id
+
+    @property
+    def active_rerank_model(self) -> str:
+        return self._active_rerank_model
+
+    @property
+    def active_rerank_provider_id(self) -> str:
+        return self._active_rerank_provider_id
+
+    def set_active_rerank(self, provider_id: str, model_name: str) -> None:
+        self._active_rerank_provider_id = provider_id
+        self._active_rerank_model = model_name
+
     # ------------------------------------------------------------------ #
     #  Vision model support
     # ------------------------------------------------------------------ #
@@ -141,9 +184,16 @@ class ModelRegistry:
     def get_vision_model(self) -> tuple[ChatProvider | None, str]:
         """返回可用的 vision 模型 (provider, model_name)。
 
-        优先返回已配置的 vision 模型，如果没有则返回 None。
+        优先返回用户配置的活跃视觉模型，如果没有则回退到第一个标记 is_vision 的模型。
         用于自动切换：当用户上传图片时，自动使用 vision 模型而非当前 chat 模型。
         """
+        # 优先使用配置的活跃视觉模型
+        if self._active_vision_provider_id and self._active_vision_model:
+            p = self._providers.get(self._active_vision_provider_id)
+            if p is not None and isinstance(p, ChatProvider):
+                return p, self._active_vision_model
+
+        # 回退：使用第一个标记 is_vision 的模型
         if not self._vision_models:
             return None, ""
         provider_id, model_name = self._vision_models[0]

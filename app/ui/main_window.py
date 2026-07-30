@@ -21,6 +21,7 @@ from app.core.rag_pipeline import RAGPipeline
 from app.ui.kb_panel import KbPanel
 from app.ui.chat_panel import ChatPanel
 from app.ui.settings_dialog import SettingsDialog
+from app.ui.theme import PANEL_BG, menu_style
 
 
 class MainWindow(QMainWindow):
@@ -56,8 +57,12 @@ class MainWindow(QMainWindow):
             self.setWindowIcon(QIcon(icon_path))
         self.resize(1100, 700)
 
+        # 设置主窗口背景
+        self.setStyleSheet(f"QMainWindow {{ background-color: {PANEL_BG}; }}")
+
         # ---- 菜单栏 ----
         menubar = self.menuBar()
+        menubar.setStyleSheet(menu_style())
         file_menu = menubar.addMenu("文件(&F)")
         settings_action = file_menu.addAction("设置(&S)...")
         settings_action.triggered.connect(self._open_settings)
@@ -76,6 +81,15 @@ class MainWindow(QMainWindow):
 
         # ---- 中央 Splitter ----
         splitter = QSplitter(Qt.Horizontal)
+        splitter.setStyleSheet(f"""
+            QSplitter {{
+                background-color: {PANEL_BG};
+            }}
+            QSplitter::handle {{
+                background-color: #E5E5E5;
+                width: 1px;
+            }}
+        """)
 
         # 左侧：知识库面板
         self._kb_panel = KbPanel(
@@ -92,7 +106,12 @@ class MainWindow(QMainWindow):
         splitter.addWidget(self._kb_panel)
 
         # 右侧：对话面板
-        self._chat_panel = ChatPanel(rag=self._rag, top_k=self._config.app_settings["top_k_retrieval"])
+        self._chat_panel = ChatPanel(
+            rag=self._rag,
+            top_k=self._config.app_settings["top_k_retrieval"],
+            rerank_enabled=self._config.app_settings.get("rerank_enabled", True),
+            rerank_candidate_multiplier=self._config.app_settings.get("rerank_candidate_multiplier", 3),
+        )
         self._chat_panel.status_message.connect(self._status_bar.showMessage)
         splitter.addWidget(self._chat_panel)
 

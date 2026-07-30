@@ -3,8 +3,10 @@
 知识库列表组件。
 """
 
-from PySide6.QtWidgets import QListWidget, QListWidgetItem, QMenu
+from PySide6.QtWidgets import QListWidget, QListWidgetItem
 from PySide6.QtCore import Qt, Signal
+
+from app.ui.widgets.simple_menu import SimpleMenu
 
 
 class KbListWidget(QListWidget):
@@ -42,7 +44,7 @@ class KbListWidget(QListWidget):
         kb_id = item.data(Qt.UserRole)
         kb_name = item.text().split("  (")[0]
 
-        menu = QMenu(self)
+        menu = SimpleMenu(self)
         rename_action = menu.addAction("重命名")
         delete_action = menu.addAction("删除")
 

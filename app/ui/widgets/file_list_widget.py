@@ -3,9 +3,12 @@
 文档列表组件 — 显示知识库内的文档。
 """
 
-from PySide6.QtWidgets import QListWidget, QListWidgetItem, QMenu
+from PySide6.QtWidgets import QListWidget, QListWidgetItem
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon
+
+from app.ui.theme import PANEL_BG
+from app.ui.widgets.simple_menu import SimpleMenu
 
 
 STATUS_ICONS = {
@@ -26,6 +29,15 @@ class FileListWidget(QListWidget):
         self.setContextMenuPolicy(Qt.CustomContextMenu)
         self.customContextMenuRequested.connect(self._show_context_menu)
         self._docs: list[dict] = []
+        # 设置统一背景色
+        self.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {PANEL_BG};
+                border: none;
+            }}
+            QListWidget::item {{ padding: 4px 6px; border-radius: 2px; }}
+            QListWidget::item:selected {{ background-color: #d6eaf8; color: #000; }}
+        """)
 
     def refresh(self, docs: list[dict]) -> None:
         self._docs = docs
@@ -49,7 +61,7 @@ class FileListWidget(QListWidget):
         if not item:
             return
         doc_id = item.data(Qt.UserRole)
-        menu = QMenu(self)
+        menu = SimpleMenu(self)
         delete_action = menu.addAction("删除文档")
         action = menu.exec(self.mapToGlobal(pos))
         if action == delete_action:

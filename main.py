@@ -37,6 +37,36 @@ from app.ui.main_window import MainWindow
 def main():
     app = QApplication(sys.argv)
     app.setStyle("Fusion")
+
+    # 全局 QMenu 样式 — 覆盖 Fusion 风格默认装饰
+    app.setStyleSheet("""
+        QMenu {
+            background-color: #FFFFFF;
+            border: 1px solid #E5E5E5;
+            border-radius: 6px;
+            padding: 4px 0px;
+        }
+        QMenu::item {
+            padding: 6px 16px;
+            color: #333333;
+            border-radius: 0px;
+        }
+        QMenu::item:selected {
+            background-color: #F0F0F0;
+        }
+        QMenu::separator {
+            height: 1px;
+            background-color: #E5E5E5;
+            margin: 4px 0px;
+        }
+        QToolTip {
+            background-color: #FFFFFF;
+            border: none;
+            padding: 2px 6px;
+            color: #333333;
+            font-size: 9pt;
+        }
+    """)
     # 设置应用图标（任务栏 + 窗口标题栏）
     logo_path = os.path.join(PROJECT_ROOT, "assets", "logo.ico")
     if os.path.exists(logo_path):

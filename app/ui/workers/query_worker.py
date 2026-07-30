@@ -25,6 +25,9 @@ class QueryWorker(QThread):
         top_k: int = 5,
         stream: bool = True,
         images: list[bytes] | None = None,
+        extra_contexts: list[dict] | None = None,
+        rerank_enabled: bool = False,
+        rerank_candidate_multiplier: int = 3,
         parent=None,
     ):
         super().__init__(parent)
@@ -34,6 +37,9 @@ class QueryWorker(QThread):
         self._top_k = top_k
         self._stream = stream
         self._images = images
+        self._extra_contexts = extra_contexts
+        self._rerank_enabled = rerank_enabled
+        self._rerank_candidate_multiplier = rerank_candidate_multiplier
 
     def run(self) -> None:
         try:
@@ -44,6 +50,9 @@ class QueryWorker(QThread):
                     top_k=self._top_k,
                     stream=True,
                     images=self._images,
+                    extra_contexts=self._extra_contexts,
+                    rerank_enabled=self._rerank_enabled,
+                    rerank_candidate_multiplier=self._rerank_candidate_multiplier,
                 )
                 self.context_retrieved.emit(contexts)
                 for token in gen:
@@ -56,6 +65,9 @@ class QueryWorker(QThread):
                     top_k=self._top_k,
                     stream=False,
                     images=self._images,
+                    extra_contexts=self._extra_contexts,
+                    rerank_enabled=self._rerank_enabled,
+                    rerank_candidate_multiplier=self._rerank_candidate_multiplier,
                 )
                 self.context_retrieved.emit(contexts)
                 self.response_ready.emit(answer)

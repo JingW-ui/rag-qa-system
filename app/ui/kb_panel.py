@@ -8,7 +8,7 @@ import os
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
     QInputDialog, QMessageBox, QFileDialog, QProgressBar,
-    QListWidget, QListWidgetItem, QMenu, QAbstractItemView,
+    QListWidget, QListWidgetItem, QAbstractItemView,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont, QIcon
@@ -20,6 +20,8 @@ from app.core.document_processor import DocumentProcessor
 from app.ui.widgets.file_list_widget import FileListWidget
 from app.ui.workers.ingest_worker import IngestWorker
 from app.ui.workers.delete_worker import DeleteWorker
+from app.ui.theme import PANEL_BG
+from app.ui.widgets.simple_menu import SimpleMenu
 
 
 class KbPanel(QWidget):
@@ -54,6 +56,9 @@ class KbPanel(QWidget):
     # ------------------------------------------------------------------ #
 
     def _setup_ui(self) -> None:
+        # 设置统一背景色
+        self.setStyleSheet(f"KbPanel {{ background-color: {PANEL_BG}; }}")
+
         layout = QVBoxLayout(self)
         layout.setContentsMargins(4, 6, 4, 6)
 
@@ -75,10 +80,15 @@ class KbPanel(QWidget):
         self._kb_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._kb_list.customContextMenuRequested.connect(self._kb_context_menu)
         self._kb_list.currentRowChanged.connect(self._on_kb_clicked)
+        self._kb_list.itemDoubleClicked.connect(self._on_kb_double_clicked)
         self._kb_list.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._kb_list.setStyleSheet("""
-            QListWidget::item { padding: 4px 6px; border-radius: 2px; }
-            QListWidget::item:selected { background-color: #d6eaf8; color: #000; }
+        self._kb_list.setStyleSheet(f"""
+            QListWidget {{
+                background-color: {PANEL_BG};
+                border: none;
+            }}
+            QListWidget::item {{ padding: 4px 6px; border-radius: 2px; }}
+            QListWidget::item:selected {{ background-color: #d6eaf8; color: #000; }}
         """)
         layout.addWidget(self._kb_list)
 
@@ -120,7 +130,7 @@ class KbPanel(QWidget):
             text = f"{prefix}{kb['name']}  ({kb.get('doc_count', 0)} 篇)"
             item = QListWidgetItem(text)
             item.setData(Qt.UserRole, kb["id"])
-            item.setToolTip(f"名称: {kb['name']}\n{'已在对话中 — 右键可移除' if in_chat else '右键可添加到对话'}")
+            item.setToolTip(f"名称: {kb['name']}\n双击{'移除' if in_chat else '添加'}到对话")
             self._kb_list.addItem(item)
 
         # 恢复/设置选中
@@ -155,6 +165,26 @@ class KbPanel(QWidget):
         if kb:
             self._refresh_docs()
 
+    def _on_kb_double_clicked(self, item: QListWidgetItem) -> None:
+        """双击知识库项时快速添加到对话或从对话移除"""
+        if item is None:
+            return
+        kb_id = item.data(Qt.UserRole)
+        kb = self._kb_mgr.get_kb(kb_id)
+        if kb is None:
+            return
+
+        in_chat = kb_id in self._chat_kb_ids
+        if in_chat:
+            self._chat_kb_ids.discard(kb_id)
+            self.status_message.emit(f"「{kb['name']}」已从对话移除")
+        else:
+            self._chat_kb_ids.add(kb_id)
+            self.status_message.emit(f"「{kb['name']}」已添加到对话")
+
+        self._refresh_kb_list()
+        self._emit_chat_kbs()
+
     # ------------------------------------------------------------------ #
     #  右键菜单 — 添加/移除对话
     # ------------------------------------------------------------------ #
@@ -169,7 +199,7 @@ class KbPanel(QWidget):
             return
 
         in_chat = kb_id in self._chat_kb_ids
-        menu = QMenu(self)
+        menu = SimpleMenu(self)
 
         if in_chat:
             action = menu.addAction("🔇 从对话移除")

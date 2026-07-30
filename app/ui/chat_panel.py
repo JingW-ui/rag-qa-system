@@ -1,7 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-对话面板 — Markdown 消息列表 + 输入区，支持流式输出 + 多知识库关联 + 图片输入。
+对话面板 — Markdown 消息列表 + 输入区，支持流式输出 + 多知识库关联 + 图片/文件输入。
 """
+
+import os
 
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QTextEdit, QPushButton,
@@ -11,11 +13,14 @@ from PySide6.QtCore import Qt, Signal, QTimer, QEvent
 from PySide6.QtGui import QFont, QPixmap, QKeySequence
 
 from app.core.rag_pipeline import RAGPipeline
+from app.core.document_processor import DocumentProcessor, SUPPORTED_EXTENSIONS
 from app.ui.widgets.message_bubble import MessageBubble
 from app.ui.widgets.image_thumb import ImageThumb
+from app.ui.widgets.file_card import FileCard
+from app.ui.widgets.quick_questions_panel import QuickQuestionsPanel
 from app.ui.workers.query_worker import QueryWorker
 from app.ui.theme import (
-    CHAT_BG, MSG_SPACING, MSG_MARGIN_H, MSG_MARGIN_V,
+    PANEL_BG, CHAT_BG, MSG_SPACING, MSG_MARGIN_H, MSG_MARGIN_V,
     INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS, INPUT_RADIUS,
     SEND_BTN_BG, SEND_BTN_BG_HOVER, SEND_BTN_BG_DISABLED, SEND_BTN_COLOR, SEND_BTN_SIZE,
     TAG_BAR_BG, TAG_BAR_BORDER, FONT_FAMILY, FONT_SIZE_SM, FONT_SIZE_NORMAL,
@@ -23,16 +28,29 @@ from app.ui.theme import (
 )
 from app.utils.image_utils import prepare_image, prepare_image_from_bytes
 
+# 支持的图片扩展名
+IMAGE_EXTENSIONS = {"png", "jpg", "jpeg", "gif", "bmp", "webp"}
+# 支持的文档扩展名（去掉前面的点）
+DOC_EXTENSIONS = {ext.lstrip(".") for ext in SUPPORTED_EXTENSIONS}
+# 最大文件大小 10MB
+MAX_FILE_SIZE = 10 * 1024 * 1024
+
 
 class ChatPanel(QWidget):
     """对话问答面板 — 支持 Markdown 渲染 + 流式输出 + 多知识库检索。"""
 
     status_message = Signal(str)
 
-    def __init__(self, rag: RAGPipeline, top_k: int = 5, parent=None):
+    def __init__(
+        self, rag: RAGPipeline, top_k: int = 5,
+        rerank_enabled: bool = False, rerank_candidate_multiplier: int = 3,
+        parent=None,
+    ):
         super().__init__(parent)
         self._rag = rag
         self._top_k = top_k
+        self._rerank_enabled = rerank_enabled
+        self._rerank_candidate_multiplier = rerank_candidate_multiplier
         self._query_worker: QueryWorker | None = None
         self._current_ai_bubble: MessageBubble | None = None
         self._active_collections: list[str] = []
@@ -40,6 +58,8 @@ class ChatPanel(QWidget):
         self._render_timer: QTimer | None = None
         self._pending_contexts: list[dict] = []
         self._attached_images: list[bytes] = []  # 已附加的图片（JPEG 字节）
+        self._attached_files: list[dict] = []    # 已附加的文件 [{filename, text, file_card}]
+        self._doc_processor = DocumentProcessor()
         self._setup_ui()
 
     # ------------------------------------------------------------------ #
@@ -54,7 +74,7 @@ class ChatPanel(QWidget):
         # ---- 已关联知识库标签栏 ----
         self._kb_tags_container = QWidget()
         self._kb_tags_container.setStyleSheet(
-            f"background-color: {TAG_BAR_BG}; border-bottom: 1px solid {TAG_BAR_BORDER};"
+            f"background-color: {TAG_BAR_BG};"
         )
         self._kb_tags_layout = QHBoxLayout(self._kb_tags_container)
         self._kb_tags_layout.setContentsMargins(10, 6, 10, 6)
@@ -79,21 +99,24 @@ class ChatPanel(QWidget):
         self._msg_layout = QVBoxLayout(self._msg_container)
         self._msg_layout.setContentsMargins(MSG_MARGIN_H, MSG_MARGIN_V, MSG_MARGIN_H, MSG_MARGIN_V)
         self._msg_layout.setSpacing(MSG_SPACING)
+
+        # ---- 快捷提问面板（空对话时显示）----
+        self._quick_panel = QuickQuestionsPanel()
+        self._quick_panel.question_selected.connect(self._on_quick_question)
+        self._msg_layout.addWidget(self._quick_panel)
+
         self._msg_layout.addStretch()
         self._scroll.setWidget(self._msg_container)
         layout.addWidget(self._scroll, 1)
 
-        # ---- 输入区（按钮内嵌右下角） ----
+        # ---- 输入区（无边框 + 浅灰底） ----
         self._input_wrapper = QWidget()
         self._input_wrapper.setObjectName("inputWrapper")
         self._input_wrapper.setStyleSheet(f"""
             #inputWrapper {{
                 background-color: {INPUT_BG};
-                border: 1px solid {INPUT_BORDER};
+                border: none;
                 border-radius: {INPUT_RADIUS}px;
-            }}
-            #inputWrapper:focus-within {{
-                border-color: {INPUT_BORDER_FOCUS};
             }}
         """)
         wrapper_layout = QVBoxLayout(self._input_wrapper)
@@ -133,7 +156,7 @@ class ChatPanel(QWidget):
 
         self._attach_btn = QPushButton("📎")
         self._attach_btn.setFixedSize(28, 28)
-        self._attach_btn.setToolTip("附加图片")
+        self._attach_btn.setToolTip("附加图片或文件")
         self._attach_btn.setCursor(Qt.PointingHandCursor)
         self._attach_btn.setStyleSheet("""
             QPushButton {
@@ -228,9 +251,10 @@ class ChatPanel(QWidget):
         return super().eventFilter(obj, event)
 
     def _handle_drop(self, event) -> None:
-        """处理拖放事件。"""
+        """处理拖放事件 — 支持图片和文档文件。"""
         mime = event.mimeData()
-        if mime.hasImage():
+        if mime.hasImage() and not mime.hasUrls():
+            # 纯图片粘贴（非文件拖拽）
             pixmap = mime.imageData()
             if pixmap and not pixmap.isNull():
                 self._add_image_from_pixmap(pixmap)
@@ -239,12 +263,7 @@ class ChatPanel(QWidget):
             for url in mime.urls():
                 if url.isLocalFile():
                     path = url.toLocalFile()
-                    ext = path.lower().rsplit(".", 1)[-1] if "." in path else ""
-                    if ext in ("png", "jpg", "jpeg", "gif", "bmp", "webp"):
-                        try:
-                            self._add_image_from_path(path)
-                        except ValueError:
-                            pass
+                    self._add_file_by_path(path)
             event.acceptProposedAction()
 
     def resizeEvent(self, event) -> None:
@@ -300,16 +319,30 @@ class ChatPanel(QWidget):
     def _send(self) -> None:
         question = self._input.toPlainText().strip()
         images = list(self._attached_images)  # 拷贝一份
-        if not question and not images:
+        files = list(self._attached_files)    # 拷贝一份
+        if not question and not images and not files:
             return
         if not self._active_collections:
             self.status_message.emit("请先将知识库添加到对话（右键知识库 → 添加到对话）")
             return
 
-        # 显示用户气泡（带图片）
-        self._add_bubble(question or "(图片)", is_user=True, images=images if images else None)
+        # 构建 extra_contexts 用于传递给 RAG
+        extra_contexts = [
+            {"filename": f["filename"], "text": f["text"]} for f in files
+        ] if files else None
+
+        # 提取文件名列表用于气泡显示
+        file_names = [f["filename"] for f in files] if files else None
+
+        # 显示用户气泡（带图片和文件）
+        display_text = question or ("(图片)" if images else "(文件)")
+        self._add_bubble(
+            display_text, is_user=True,
+            images=images if images else None,
+            file_names=file_names,
+        )
         self._input.clear()
-        self._clear_images()
+        self._clear_attachments()
 
         self._stream_buffer = ""
         self._current_ai_bubble = self._add_bubble("💭 _正在思考..._", is_user=False)
@@ -317,6 +350,8 @@ class ChatPanel(QWidget):
         self._input.setEnabled(False)
         if images:
             self.status_message.emit("🖼 已自动切换视觉理解模型，查询中...")
+        elif files:
+            self.status_message.emit(f"📄 已附加 {len(files)} 个文件，查询中...")
         else:
             self.status_message.emit("查询中...")
 
@@ -327,6 +362,9 @@ class ChatPanel(QWidget):
             top_k=self._top_k,
             stream=True,
             images=images if images else None,
+            extra_contexts=extra_contexts,
+            rerank_enabled=self._rerank_enabled,
+            rerank_candidate_multiplier=self._rerank_candidate_multiplier,
         )
         self._query_worker.token_generated.connect(self._on_token)
         self._query_worker.finished.connect(self._on_query_finished)
@@ -337,6 +375,11 @@ class ChatPanel(QWidget):
     # ------------------------------------------------------------------ #
     #  Callbacks
     # ------------------------------------------------------------------ #
+
+    def _on_quick_question(self, question: str) -> None:
+        """快捷提问面板点击卡片时触发。"""
+        self._input.setPlainText(question)
+        self._send()
 
     def _on_token(self, token: str) -> None:
         self._stream_buffer += token
@@ -360,8 +403,12 @@ class ChatPanel(QWidget):
 
     def _on_query_finished(self, success: bool, _msg: str) -> None:
         self._flush_render()
-        if success and self._pending_contexts and self._current_ai_bubble:
-            self._current_ai_bubble.set_sources(self._pending_contexts)
+        if success and self._current_ai_bubble:
+            # 显示引用来源（如果有）
+            if self._pending_contexts:
+                self._current_ai_bubble.set_sources(self._pending_contexts)
+            # 始终显示复制按钮（即使没有引用来源）
+            self._current_ai_bubble.show_copy_button()
         self._send_btn.setEnabled(True)
         self._input.setEnabled(True)
         self._current_ai_bubble = None
@@ -384,8 +431,20 @@ class ChatPanel(QWidget):
     #  Helpers
     # ------------------------------------------------------------------ #
 
-    def _add_bubble(self, text: str, is_user: bool, images: list[bytes] | None = None) -> MessageBubble:
-        bubble = MessageBubble(text, is_user, max_width=BUBBLE_MAX_WIDTH, images=images)
+    def _add_bubble(
+        self, text: str, is_user: bool,
+        images: list[bytes] | None = None,
+        file_names: list[str] | None = None,
+    ) -> MessageBubble:
+        # 隐藏快捷提问面板（首次发送消息时）
+        if self._quick_panel.isVisible():
+            self._quick_panel.setVisible(False)
+
+        bubble = MessageBubble(
+            text, is_user, max_width=BUBBLE_MAX_WIDTH,
+            images=images, file_names=file_names,
+        )
+        bubble.copy_done.connect(self.status_message.emit)
         self._msg_layout.insertWidget(self._msg_layout.count() - 1, bubble)
         QTimer.singleShot(50, self._scroll_to_bottom)
         return bubble
@@ -397,24 +456,73 @@ class ChatPanel(QWidget):
     def clear(self) -> None:
         while self._msg_layout.count() > 1:
             item = self._msg_layout.takeAt(0)
-            if item.widget():
+            if item.widget() and item.widget() is not self._quick_panel:
                 item.widget().deleteLater()
+        # 重新显示快捷提问面板
+        self._quick_panel.setVisible(True)
 
     # ------------------------------------------------------------------ #
-    #  图片处理
+    #  附件处理（图片 + 文件）
     # ------------------------------------------------------------------ #
 
     def _on_attach_clicked(self) -> None:
-        """点击附件按钮选择图片。"""
+        """点击附件按钮选择图片或文件。"""
         file_paths, _ = QFileDialog.getOpenFileNames(
-            self, "选择图片", "",
-            "图片文件 (*.png *.jpg *.jpeg *.gif *.bmp *.webp);;所有文件 (*.*)"
+            self, "选择文件或图片", "",
+            "所有支持的文件 (*.pdf *.docx *.md *.txt *.json *.jsonl *.png *.jpg *.jpeg *.gif *.bmp *.webp)"
+            ";;文档 (*.pdf *.docx *.md *.txt *.json *.jsonl)"
+            ";;图片 (*.png *.jpg *.jpeg *.gif *.bmp *.webp)"
+            ";;所有文件 (*.*)"
         )
         for path in file_paths:
+            self._add_file_by_path(path)
+
+    def _add_file_by_path(self, path: str) -> None:
+        """根据文件扩展名自动分类处理。"""
+        if not os.path.isfile(path):
+            return
+        ext = os.path.splitext(path)[1].lower().lstrip(".")
+        filename = os.path.basename(path)
+
+        # 文件大小检查
+        file_size = os.path.getsize(path)
+        if file_size > MAX_FILE_SIZE:
+            self.status_message.emit(f"文件过大（{file_size // 1024 // 1024}MB），最大支持 10MB: {filename}")
+            return
+
+        if ext in IMAGE_EXTENSIONS:
             try:
                 self._add_image_from_path(path)
             except ValueError as e:
                 self.status_message.emit(f"图片加载失败: {e}")
+        elif ext in DOC_EXTENSIONS:
+            self._add_document_file(path)
+        else:
+            self.status_message.emit(f"不支持的文件类型: .{ext}")
+
+    def _add_document_file(self, path: str) -> None:
+        """解析文档文件并添加为附件。"""
+        filename = os.path.basename(path)
+        if len(self._attached_files) >= 6:
+            self.status_message.emit("最多附加 6 个文件")
+            return
+        try:
+            text = self._doc_processor.parse(path)
+            if not text.strip():
+                self.status_message.emit(f"文件内容为空: {filename}")
+                return
+            file_data = {"filename": filename, "text": text, "file_card": None}
+            self._attached_files.append(file_data)
+            # 创建文件卡片
+            card = FileCard(filename, removable=True)
+            card.remove_clicked.connect(self._on_remove_file)
+            file_data["file_card"] = card
+            # 插入到 stretch 之前
+            self._thumbs_layout.insertWidget(self._thumbs_layout.count() - 1, card)
+            self._thumbs_container.setVisible(True)
+            self.status_message.emit(f"已添加文件: {filename} ({len(text)} 字符)")
+        except Exception as e:
+            self.status_message.emit(f"文件解析失败: {filename} — {e}")
 
     def _add_image_from_path(self, path: str) -> None:
         """从路径添加图片。"""
@@ -435,7 +543,7 @@ class ChatPanel(QWidget):
             return
         self._attached_images.append(img_bytes)
         # 创建缩略图
-        thumb = ImageThumb(img_bytes, removable=True)
+        thumb = ImageThumb(img_bytes, removable=True, max_width=80, max_height=80)
         thumb.remove_clicked.connect(self._on_remove_image)
         # 插入到 stretch 之前
         self._thumbs_layout.insertWidget(self._thumbs_layout.count() - 1, thumb)
@@ -447,12 +555,26 @@ class ChatPanel(QWidget):
         if img_bytes in self._attached_images:
             self._attached_images.remove(img_bytes)
         thumb.deleteLater()
-        if not self._attached_images:
-            self._thumbs_container.setVisible(False)
+        self._update_attachments_visibility()
 
-    def _clear_images(self) -> None:
-        """清空所有附加图片。"""
+    def _on_remove_file(self, card: FileCard) -> None:
+        """删除一个附加文件。"""
+        for i, f in enumerate(self._attached_files):
+            if f["filename"] == card.filename:
+                self._attached_files.pop(i)
+                break
+        card.deleteLater()
+        self._update_attachments_visibility()
+
+    def _update_attachments_visibility(self) -> None:
+        """根据是否有附件更新容器可见性。"""
+        has_attachments = bool(self._attached_images) or bool(self._attached_files)
+        self._thumbs_container.setVisible(has_attachments)
+
+    def _clear_attachments(self) -> None:
+        """清空所有附件（图片 + 文件）。"""
         self._attached_images.clear()
+        self._attached_files.clear()
         while self._thumbs_layout.count() > 1:  # 保留末尾的 stretch
             item = self._thumbs_layout.takeAt(0)
             if item.widget():
