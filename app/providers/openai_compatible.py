@@ -93,13 +93,11 @@ class OpenAICompatibleProvider(BaseProvider, ChatProvider, EmbeddingProvider, Re
         """
         # 从 base_url 推断 rerank endpoint
         # base_url 通常是 https://xxx/compatible-mode/v1
+        # DashScope rerank 格式: .../compatible-mode/services/rerank/text-rerank/{model}
         base = self._config.base_url.rstrip("/")
         if base.endswith("/v1"):
-            rerank_url = base[:-3] + "/services/rerank/text-rerank/text-rerank"
-        elif base.endswith("/compatible-mode"):
-            rerank_url = base + "/v1/services/rerank/text-rerank/text-rerank"
-        else:
-            rerank_url = base + "/services/rerank/text-rerank/text-rerank"
+            base = base[:-3]
+        rerank_url = base + f"/services/rerank/text-rerank/{model}"
 
         payload = {
             "model": model,

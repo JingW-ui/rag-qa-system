@@ -301,7 +301,7 @@ class ChatPanel(QWidget):
                 tag.setStyleSheet(tag_style())
                 self._kb_tags_layout.addWidget(tag)
             self._kb_tags_layout.addStretch()
-            self._kb_tags_hint.setVisible(False)
+            self._kb_tags_hint = None
         else:
             self._kb_tags_hint = QLabel('<span style="color:#999;">未关联知识库 — 请在左侧知识库上右键「添加到对话」</span>')
             self._kb_tags_hint.setFont(QFont(FONT_FAMILY, FONT_SIZE_SM))
