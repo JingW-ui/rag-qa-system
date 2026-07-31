@@ -1,7 +1,7 @@
 ![banner](assets/banner.jpg)
 
 基于 PySide6 + ChromaDB + 阿里云 MaaS 的本地 RAG 知识库问答桌面应用。本地运行，数据不出本机，支持多模型供应商、重排检索与多模态视觉理解。
-
+![ui_default.png](assets/ui_default.png)
 ## 功能
 
 - **知识库管理** — 创建/删除知识库，支持 PDF、DOCX、Markdown、纯文本、JSON、JSONL 文档
