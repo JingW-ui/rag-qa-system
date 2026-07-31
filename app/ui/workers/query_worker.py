@@ -14,6 +14,7 @@ class QueryWorker(QThread):
     token_generated = Signal(str)          # 每个 token
     response_ready = Signal(str)           # 非流式：完整响应
     context_retrieved = Signal(list)       # 检索到的上下文（用于展示来源）
+    rerank_info = Signal(dict)             # 重排信息（用于状态栏日志）
     finished = Signal(bool, str)           # (success, message)
     error = Signal(str)
 
@@ -44,7 +45,7 @@ class QueryWorker(QThread):
     def run(self) -> None:
         try:
             if self._stream:
-                gen, contexts = self._rag.query_multi_with_contexts(
+                gen, contexts, rerank_info = self._rag.query_multi_with_contexts(
                     self._collections,
                     self._question,
                     top_k=self._top_k,
@@ -54,12 +55,13 @@ class QueryWorker(QThread):
                     rerank_enabled=self._rerank_enabled,
                     rerank_candidate_multiplier=self._rerank_candidate_multiplier,
                 )
+                self.rerank_info.emit(rerank_info)
                 self.context_retrieved.emit(contexts)
                 for token in gen:
                     self.token_generated.emit(token)
                 self.finished.emit(True, "")
             else:
-                answer, contexts = self._rag.query_multi_with_contexts(
+                answer, contexts, rerank_info = self._rag.query_multi_with_contexts(
                     self._collections,
                     self._question,
                     top_k=self._top_k,
@@ -69,6 +71,7 @@ class QueryWorker(QThread):
                     rerank_enabled=self._rerank_enabled,
                     rerank_candidate_multiplier=self._rerank_candidate_multiplier,
                 )
+                self.rerank_info.emit(rerank_info)
                 self.context_retrieved.emit(contexts)
                 self.response_ready.emit(answer)
                 self.finished.emit(True, "")

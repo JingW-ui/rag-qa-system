@@ -370,6 +370,7 @@ class ChatPanel(QWidget):
         self._query_worker.finished.connect(self._on_query_finished)
         self._query_worker.error.connect(self._on_query_error)
         self._query_worker.context_retrieved.connect(self._on_context_retrieved)
+        self._query_worker.rerank_info.connect(self._on_rerank_info)
         self._query_worker.start()
 
     # ------------------------------------------------------------------ #
@@ -400,6 +401,25 @@ class ChatPanel(QWidget):
             ))
             if sources:
                 self.status_message.emit(f"检索到 {len(contexts)} 个片段: {', '.join(sources[:4])}")
+
+    def _on_rerank_info(self, info: dict) -> None:
+        """把重排情况输出到状态栏，便于在 UI 看到 re-rank 日志。"""
+        if not info or not info.get("enabled"):
+            return
+        model = info.get("model") or "—"
+        candidates = info.get("candidates", 0)
+        returned = info.get("returned", 0)
+        if info.get("fallback"):
+            self.status_message.emit(
+                f"🔁 重排已跳过(回退向量排序): {info.get('error', '未知原因')} "
+                f"| 候选 {candidates}"
+            )
+        elif info.get("ran"):
+            self.status_message.emit(
+                f"🔁 重排完成: {model} · 候选 {candidates} → 精排 {returned}"
+            )
+        else:
+            self.status_message.emit(f"🔁 重排未执行 | 候选 {candidates}")
 
     def _on_query_finished(self, success: bool, _msg: str) -> None:
         self._flush_render()

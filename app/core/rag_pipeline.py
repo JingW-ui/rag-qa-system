@@ -63,7 +63,7 @@ class RAGPipeline:
             images: 可选，图片字节列表（用于多模态 VLM）。
             extra_contexts: 可选，额外文件上下文列表 [{filename, text}]。
         """
-        result, _contexts = self.query_multi_with_contexts(
+        result, _contexts, _rerank_info = self.query_multi_with_contexts(
             collection_names, question, top_k, stream, images, extra_contexts
         )
         return result
@@ -78,18 +78,19 @@ class RAGPipeline:
         extra_contexts: list[dict] | None = None,
         rerank_enabled: bool = False,
         rerank_candidate_multiplier: int = 3,
-    ) -> tuple[str | Iterator[str], list[dict]]:
+    ) -> tuple[str | Iterator[str], list[dict], dict]:
         """
         跨多个知识库检索 + 生成，同时返回检索到的上下文。
 
         Returns:
-            (answer_or_stream, contexts) — contexts 为检索到的分块列表。
+            (answer_or_stream, contexts, rerank_info) —
+            contexts 为检索到的分块列表；rerank_info 描述本次重排情况。
         """
         if not collection_names:
             fallback_msg = "没有关联的知识库，请先将知识库添加到对话。"
             if stream:
-                return iter([fallback_msg]), []
-            return fallback_msg, []
+                return iter([fallback_msg]), [], {}
+            return fallback_msg, [], {}
 
         # 1. 多库检索 + 合并去重
         # 如果启用重排，多召回一些候选
@@ -109,12 +110,15 @@ class RAGPipeline:
         if not all_results:
             fallback_msg = "未在关联知识库中找到相关信息。"
             if stream:
-                return iter([fallback_msg]), []
-            return fallback_msg, []
+                return iter([fallback_msg]), [], {}
+            return fallback_msg, [], {}
 
         # 2. 重排（如果启用）
+        rerank_info: dict = {"enabled": rerank_enabled}
         if rerank_enabled:
-            all_results = self._rerank_results(question, all_results, top_k)
+            all_results, rerank_info = self._rerank_results(
+                question, all_results, top_k
+            )
 
         all_results = all_results[:top_k]
 
@@ -134,10 +138,10 @@ class RAGPipeline:
 
         if stream:
             gen = provider.chat(messages=messages, model=model, stream=True)
-            return gen, all_results
+            return gen, all_results, rerank_info
         else:
             answer = provider.chat(messages=messages, model=model, stream=False)
-            return answer, all_results
+            return answer, all_results, rerank_info
 
     # ------------------------------------------------------------------ #
     #  Internal
@@ -145,18 +149,36 @@ class RAGPipeline:
 
     def _rerank_results(
         self, question: str, candidates: list[dict], top_n: int
-    ) -> list[dict]:
+    ) -> tuple[list[dict], dict]:
         """调用 Rerank 模型对候选结果重排。
 
-        如果 API 失败，静默回退到原始排序结果。
+        返回 (重排后的列表, rerank_info)。rerank_info 描述本次重排情况，
+        供 UI 展示日志。API 失败时静默回退到原始排序。
         """
+        info: dict = {
+            "enabled": True,
+            "ran": False,
+            "model": None,
+            "candidates": len(candidates),
+            "returned": len(candidates),
+            "top_n": top_n,
+            "fallback": False,
+            "error": None,
+        }
+
         rerank_provider = self._registry.get_rerank_provider()
         if rerank_provider is None:
-            return candidates
+            info["fallback"] = True
+            info["error"] = "无可用重排供应商"
+            return candidates, info
 
         rerank_model = self._registry.active_rerank_model
         if not rerank_model:
-            return candidates
+            info["fallback"] = True
+            info["error"] = "未配置重排模型"
+            return candidates, info
+
+        info["model"] = rerank_model
 
         try:
             documents = [c.get("text", "") for c in candidates]
@@ -184,12 +206,16 @@ class RAGPipeline:
                         if len(reranked) >= top_n:
                             break
 
-            return reranked
+            info["ran"] = True
+            info["returned"] = len(reranked)
+            return reranked, info
 
         except Exception as e:
             # 静默回退
             print(f"[WARN] Rerank 失败，回退到向量排序: {e}")
-            return candidates
+            info["fallback"] = True
+            info["error"] = str(e)
+            return candidates, info
 
     def _build_messages(
         self,

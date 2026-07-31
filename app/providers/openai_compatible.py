@@ -3,7 +3,6 @@
 OpenAI 兼容供应商 — 统一 MaaS、Ollama 等所有 OpenAI-compatible API。
 """
 
-import requests
 from openai import OpenAI
 from typing import Iterator
 
@@ -32,6 +31,8 @@ class OpenAICompatibleProvider(BaseProvider, ChatProvider, EmbeddingProvider, Re
             api_key=config.api_key,
             base_url=config.base_url,
         )
+        # rerank 走 /reranks 端点，base_url 可能与 chat/embedding 不同，懒加载
+        self._rerank_client: OpenAI | None = None
 
     # ------------------------------------------------------------------ #
     #  Chat
@@ -87,50 +88,52 @@ class OpenAICompatibleProvider(BaseProvider, ChatProvider, EmbeddingProvider, Re
         model: str,
         top_n: int | None = None,
     ) -> RerankResult:
-        """调用阿里云 gte-rerank API 进行精排。
+        """调用阿里云 MaaS rerank 进行精排。
 
-        阿里云 rerank 使用独立 endpoint，不走 OpenAI SDK。
+        走 OpenAI 兼容的 /reranks 端点（参考 tests/re-rank_test.py，已验证通过）。
+        api_key / base_url 均从 config 读取，无需硬编码。
         """
-        # 从 base_url 推断 rerank endpoint
-        # base_url 通常是 https://xxx/compatible-mode/v1
-        # DashScope rerank 格式: .../compatible-mode/services/rerank/text-rerank/{model}
-        base = self._config.base_url.rstrip("/")
-        if base.endswith("/v1"):
-            base = base[:-3]
-        rerank_url = base + f"/services/rerank/text-rerank/{model}"
+        client = self._get_rerank_client()
 
-        payload = {
+        body: dict = {
             "model": model,
-            "input": {
-                "query": query,
-                "documents": documents,
-            },
-            "parameters": {
-                "return_documents": False,
-            },
+            "query": query,
+            "documents": documents,
         }
         if top_n is not None:
-            payload["parameters"]["top_n"] = top_n
+            body["top_n"] = top_n
 
-        headers = {
-            "Authorization": f"Bearer {self._config.api_key}",
-            "Content-Type": "application/json",
-        }
+        # cast_to=object → 返回原始 JSON dict
+        data = client.post("/reranks", body=body, cast_to=object)
 
-        resp = requests.post(rerank_url, json=payload, headers=headers, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-
-        # 解析结果：阿里云返回 {"output": {"results": [{"index": int, "relevance_score": float}, ...]}}
-        output = data.get("output", {})
-        raw_results = output.get("results", [])
-
+        # 返回格式: {"results": [{"index": int, "relevance_score": float}, ...]}
+        raw_results = data.get("results", []) if isinstance(data, dict) else []
         results = [
             (r["index"], r["relevance_score"])
-            for r in sorted(raw_results, key=lambda x: x["relevance_score"], reverse=True)
+            for r in sorted(
+                raw_results,
+                key=lambda x: x["relevance_score"],
+                reverse=True,
+            )
         ]
-
         return RerankResult(model=model, results=results)
+
+    def _get_rerank_client(self) -> OpenAI:
+        """rerank 专用 OpenAI 客户端，api_key/base_url 均取自 config。
+
+        阿里云 MaaS 的 /reranks 端点位于 compatible-api 路径下；config 里
+        chat/embedding 用的 base_url 通常是 compatible-mode，这里做替换。
+        若 base_url 本身不是 compatible-mode，则原样使用。
+        """
+        if self._rerank_client is None:
+            base = self._config.base_url.replace(
+                "/compatible-mode/", "/compatible-api/"
+            )
+            self._rerank_client = OpenAI(
+                api_key=self._config.api_key,
+                base_url=base,
+            )
+        return self._rerank_client
 
     def list_rerank_models(self) -> list[str]:
         return [m.get("model_name", "") for m in self._config.rerank_models]
