@@ -173,3 +173,44 @@ class KnowledgeBaseManager:
             [(doc_id, idx, cid, count) for idx, cid, count in chunk_chroma_pairs],
         )
         self._db.conn.commit()
+
+    def get_chunks_for_document(self, doc_id: int) -> list[dict]:
+        """取回某文档的所有分块文本（按 chunk_index 排序），供分块预览展示。
+
+        复用 delete_document 中 join 解析 collection 名的模式。
+        返回值可直接喂 ChunkCard：每项含 text / metadata.filename / distance=None。
+        """
+        cur = self._db.conn.cursor()
+        cur.execute(
+            """SELECT chunk_index, chroma_id FROM chunks
+               WHERE document_id = ? ORDER BY chunk_index""",
+            (doc_id,),
+        )
+        rows = cur.fetchall()
+        if not rows:
+            return []
+
+        # 解析文档所属 KB 的 collection 名 + 文件名
+        cur.execute(
+            """SELECT k.chroma_collection_name, d.filename
+               FROM knowledge_bases k
+               JOIN documents d ON d.kb_id = k.id
+               WHERE d.id = ?""",
+            (doc_id,),
+        )
+        kb_row = cur.fetchone()
+        if not kb_row:
+            return []
+
+        collection = kb_row["chroma_collection_name"]
+        filename = kb_row["filename"]
+        chroma_ids = [r["chroma_id"] for r in rows]
+        docs = self._vs.get_by_ids(collection, chroma_ids)
+
+        # 按 chunk_index 顺序对齐（get_by_ids 按传入 ids 顺序返回）
+        for i, ctx in enumerate(docs):
+            meta = dict(ctx.get("metadata") or {})
+            meta.setdefault("filename", filename)
+            meta["chunk_index"] = rows[i]["chunk_index"] if i < len(rows) else i
+            ctx["metadata"] = meta
+        return docs

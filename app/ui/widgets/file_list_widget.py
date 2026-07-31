@@ -7,7 +7,7 @@ from PySide6.QtWidgets import QListWidget, QListWidgetItem
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QIcon
 
-from app.ui.theme import PANEL_BG
+from app.ui.theme import list_style
 from app.ui.widgets.simple_menu import SimpleMenu
 
 
@@ -30,14 +30,7 @@ class FileListWidget(QListWidget):
         self.customContextMenuRequested.connect(self._show_context_menu)
         self._docs: list[dict] = []
         # 设置统一背景色
-        self.setStyleSheet(f"""
-            QListWidget {{
-                background-color: {PANEL_BG};
-                border: none;
-            }}
-            QListWidget::item {{ padding: 4px 6px; border-radius: 2px; }}
-            QListWidget::item:selected {{ background-color: #d6eaf8; color: #000; }}
-        """)
+        self.setStyleSheet(list_style())
 
     def refresh(self, docs: list[dict]) -> None:
         self._docs = docs

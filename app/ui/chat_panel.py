@@ -19,6 +19,7 @@ from app.ui.widgets.image_thumb import ImageThumb
 from app.ui.widgets.file_card import FileCard
 from app.ui.widgets.quick_questions_panel import QuickQuestionsPanel
 from app.ui.workers.query_worker import QueryWorker
+from app.ui.widgets.section_header import clear_layout as _clear_layout
 from app.ui.theme import (
     PANEL_BG, CHAT_BG, MSG_SPACING, MSG_MARGIN_H, MSG_MARGIN_V,
     INPUT_BG, INPUT_BORDER, INPUT_BORDER_FOCUS, INPUT_RADIUS,
@@ -209,6 +210,24 @@ class ChatPanel(QWidget):
         self._render_timer = QTimer(self)
         self._render_timer.setSingleShot(True)
         self._render_timer.timeout.connect(self._flush_render)
+
+        # 放入 QStackedWidget 后首次显示可能 0 宽竞态,兜底重定位发送按钮
+        QTimer.singleShot(0, self._position_send_btn)
+
+    def set_retrieval_params(
+        self,
+        top_k: int,
+        rerank_enabled: bool,
+        rerank_candidate_multiplier: int,
+    ) -> None:
+        """运行时更新检索参数（设置页保存后由 MainWindow 调用）。
+
+        这些属性在 _send 构造 QueryWorker 时现读(见构造处),故直接赋值即可生效。
+        修复旧 bug:此前仅在 ChatPanel 构造时传入一次,改设置后不刷新。
+        """
+        self._top_k = top_k
+        self._rerank_enabled = rerank_enabled
+        self._rerank_candidate_multiplier = rerank_candidate_multiplier
 
     def eventFilter(self, obj, event) -> bool:
         # 处理输入框的按键事件
@@ -600,11 +619,3 @@ class ChatPanel(QWidget):
             if item.widget():
                 item.widget().deleteLater()
         self._thumbs_container.setVisible(False)
-
-
-def _clear_layout(layout) -> None:
-    """清空 layout 中所有子 widget。"""
-    while layout.count():
-        item = layout.takeAt(0)
-        if item.widget():
-            item.widget().deleteLater()

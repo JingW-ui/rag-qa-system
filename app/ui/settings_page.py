@@ -1,17 +1,21 @@
 # -*- coding: utf-8 -*-
 """
-设置对话框 — 模型供应商管理 + 活跃模型选择 + 通用设置。
+设置页 — 模型供应商管理 + 活跃模型选择 + 通用设置。
+
+由 settings_dialog.py 重构:QDialog 模态弹窗 → QWidget 内嵌页面,
+Ok/Cancel 按钮盒 → 底部 保存/重置 按钮栏,保存后发 saved 信号通知主窗口刷新。
+三个 tab builder 与所有 helper 不变。
 """
 
 import copy
 
 from PySide6.QtWidgets import (
-    QDialog, QTabWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
+    QTabWidget, QVBoxLayout, QHBoxLayout, QFormLayout,
     QListWidget, QListWidgetItem, QPushButton, QLineEdit, QComboBox,
-    QCheckBox, QSpinBox, QGroupBox, QLabel, QMessageBox, QDialogButtonBox,
+    QCheckBox, QSpinBox, QGroupBox, QLabel, QMessageBox,
     QWidget, QTableWidget, QTableWidgetItem, QHeaderView,
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal
 
 from app.core.config import ConfigManager
 from app.core.model_registry import ModelRegistry
@@ -21,8 +25,11 @@ PROVIDER_TYPES = ["openai_compatible", "ollama"]
 CHUNK_METHODS = ["recursive", "fixed"]
 
 
-class SettingsDialog(QDialog):
-    """模型设置对话框（模态）。"""
+class SettingsPage(QWidget):
+    """模型设置页(内嵌于主窗体 QStackedWidget,非模态)。"""
+
+    saved = Signal()              # 保存成功 → 主窗口刷新 registry/proc/chat 参数
+    status_message = Signal(str)  # 状态栏提示
 
     def __init__(
         self,
@@ -33,10 +40,8 @@ class SettingsDialog(QDialog):
         super().__init__(parent)
         self._config = config
         self._registry = registry
-        # 深拷贝以避免直接修改原始数据
+        # 深拷贝以避免直接修改原始数据;保存才提交,重置则重新拷贝
         self._data = copy.deepcopy(config.data)
-        self.setWindowTitle("设置")
-        self.resize(700, 520)
         self._setup_ui()
         self._load_data()
 
@@ -53,11 +58,16 @@ class SettingsDialog(QDialog):
         self._setup_general_tab()
         layout.addWidget(self._tabs)
 
-        # 按钮
-        buttons = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
-        buttons.accepted.connect(self._save_and_accept)
-        buttons.rejected.connect(self.reject)
-        layout.addWidget(buttons)
+        # 底部按钮栏:保存 / 重置
+        btn_bar = QHBoxLayout()
+        btn_bar.addStretch()
+        self._save_btn = QPushButton("💾 保存")
+        self._save_btn.clicked.connect(self._save)
+        self._reset_btn = QPushButton("↺ 重置")
+        self._reset_btn.clicked.connect(self._reset)
+        btn_bar.addWidget(self._reset_btn)
+        btn_bar.addWidget(self._save_btn)
+        layout.addLayout(btn_bar)
 
     # ------------------------------------------------------------------ #
     #  Tab 1: Model Providers
@@ -241,7 +251,7 @@ class SettingsDialog(QDialog):
         self._tabs.addTab(tab, "通用")
 
     # ------------------------------------------------------------------ #
-    #  Load / Save
+    #  Load / Save / Reset
     # ------------------------------------------------------------------ #
 
     def _load_data(self) -> None:
@@ -324,8 +334,8 @@ class SettingsDialog(QDialog):
         if self._prov_list.count() > 0:
             self._prov_list.setCurrentRow(0)
 
-    def _save_and_accept(self) -> None:
-        """从 UI 收集数据并保存。"""
+    def _save(self) -> None:
+        """从 UI 收集数据并保存,发 saved 信号;不关闭页面。"""
         self._save_current_provider()  # 先保存当前正在编辑的供应商
 
         self._data["active_providers"]["chat"] = self._active_chat_prov.currentData()
@@ -346,7 +356,14 @@ class SettingsDialog(QDialog):
 
         self._config.save(self._data)
         self._registry.reload_config(self._data)
-        self.accept()
+        self.status_message.emit("设置已保存,新模型与参数已生效")
+        self.saved.emit()
+
+    def _reset(self) -> None:
+        """放弃当前编辑,从磁盘配置重新加载回填。"""
+        self._data = copy.deepcopy(self._config.data)
+        self._load_data()
+        self.status_message.emit("已重置为已保存配置")
 
     # ------------------------------------------------------------------ #
     #  Provider form

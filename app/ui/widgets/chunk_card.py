@@ -40,13 +40,19 @@ class ChunkCard(QFrame):
 
         filename = self._context.get("metadata", {}).get("filename", "未知文档")
         # 优先显示重排分数，否则用 L2 距离转换
+        # 二者皆无（如分块预览场景 distance=None）时不显示分数
         rerank_score = self._context.get("rerank_score")
+        distance = self._context.get("distance")
+        show_score = True
         if rerank_score is not None:
             score = rerank_score * 100  # 0-1 → 0-100
             score_prefix = "🔥"
-        else:
-            distance = self._context.get("distance", 0.0)
+        elif distance is not None:
             score = self._distance_to_score(distance)
+            score_prefix = ""
+        else:
+            show_score = False
+            score = 0.0
             score_prefix = ""
 
         self._header_label = QLabel(f"[{self._index}] 📄 {filename}")
@@ -55,10 +61,11 @@ class ChunkCard(QFrame):
 
         header.addStretch()
 
-        score_label = QLabel(f"{score_prefix}{score:.0f}%")
-        score_label.setFont(QFont(FONT_FAMILY, FONT_SIZE_SM))
-        score_label.setStyleSheet(f"color: {SOURCE_SCORE_COLOR};")
-        header.addWidget(score_label)
+        if show_score:
+            score_label = QLabel(f"{score_prefix}{score:.0f}%")
+            score_label.setFont(QFont(FONT_FAMILY, FONT_SIZE_SM))
+            score_label.setStyleSheet(f"color: {SOURCE_SCORE_COLOR};")
+            header.addWidget(score_label)
 
         layout.addLayout(header)
 

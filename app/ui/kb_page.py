@@ -1,31 +1,37 @@
 # -*- coding: utf-8 -*-
 """
-知识库管理侧边栏 — 扁平 KB 列表 + 对话关联 + 右键菜单。
+知识库页 — 左 KB 列表 + 右文档列表(含分块预览),对话关联 + 右键菜单。
+
+由 kb_panel.py 重构:单列堆叠 → 两栏,新增 ChunkCard 分块预览。
+保留全部 KB/文档 CRUD、IngestWorker/DeleteWorker、对话关联、右键菜单逻辑。
 """
 
 import os
 
 from PySide6.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QPushButton,
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QInputDialog, QMessageBox, QFileDialog, QProgressBar,
     QListWidget, QListWidgetItem, QAbstractItemView,
+    QScrollArea,
 )
 from PySide6.QtCore import Qt, Signal
-from PySide6.QtGui import QFont, QIcon
+from PySide6.QtGui import QFont
 
 from app.core.kb_manager import KnowledgeBaseManager
 from app.core.vector_store import VectorStore
 from app.core.embedding_service import EmbeddingService
 from app.core.document_processor import DocumentProcessor
 from app.ui.widgets.file_list_widget import FileListWidget
+from app.ui.widgets.chunk_card import ChunkCard
+from app.ui.widgets.section_header import SectionHeader, h_separator, clear_layout
 from app.ui.workers.ingest_worker import IngestWorker
 from app.ui.workers.delete_worker import DeleteWorker
-from app.ui.theme import PANEL_BG
+from app.ui.theme import PANEL_BG, FONT_FAMILY, FONT_SIZE_SM, list_style
 from app.ui.widgets.simple_menu import SimpleMenu
 
 
-class KbPanel(QWidget):
-    """知识库管理面板 — 扁平列表 + 多选对话关联。"""
+class KbPage(QWidget):
+    """知识库页 — 两栏:KB 列表 + 文档列表/分块预览。"""
 
     kb_changed = Signal(int, str)                # kb_id, collection_name (选中浏览)
     chat_kbs_changed = Signal(list, list)         # ([collection_names], [kb_names])
@@ -56,62 +62,76 @@ class KbPanel(QWidget):
     # ------------------------------------------------------------------ #
 
     def _setup_ui(self) -> None:
-        # 设置统一背景色
-        self.setStyleSheet(f"KbPanel {{ background-color: {PANEL_BG}; }}")
+        self.setStyleSheet(f"KbPage {{ background-color: {PANEL_BG}; }}")
 
-        layout = QVBoxLayout(self)
-        layout.setContentsMargins(4, 6, 4, 6)
+        root = QHBoxLayout(self)
+        root.setContentsMargins(6, 6, 6, 6)
+        root.setSpacing(6)
 
-        # ---- 顶部操作 ----
-        header = QHBoxLayout()
-        header.addWidget(QLabel("<b>📚 知识库</b>"))
-        header.addStretch()
-        btn_new = QPushButton("+ 新建")
-        btn_new.clicked.connect(self._create_kb)
-        header.addWidget(btn_new)
-        btn_del = QPushButton("🗑")
-        btn_del.setToolTip("删除选中知识库")
-        btn_del.clicked.connect(self._delete_current_kb)
-        header.addWidget(btn_del)
-        layout.addLayout(header)
+        # ==================== 左栏:KB 列表 ====================
+        left = QWidget()
+        left.setMinimumWidth(260)
+        left.setMaximumWidth(400)
+        left_layout = QVBoxLayout(left)
+        left_layout.setContentsMargins(0, 0, 0, 0)
 
-        # ---- KB 列表 ----
+        left_layout.addWidget(SectionHeader(
+            "📚 知识库",
+            [("+ 新建", "新建知识库", self._create_kb),
+             ("🗑", "删除选中知识库", self._delete_current_kb)],
+        ))
+
         self._kb_list = QListWidget()
         self._kb_list.setContextMenuPolicy(Qt.CustomContextMenu)
         self._kb_list.customContextMenuRequested.connect(self._kb_context_menu)
         self._kb_list.currentRowChanged.connect(self._on_kb_clicked)
         self._kb_list.itemDoubleClicked.connect(self._on_kb_double_clicked)
         self._kb_list.setSelectionMode(QAbstractItemView.SingleSelection)
-        self._kb_list.setStyleSheet(f"""
-            QListWidget {{
-                background-color: {PANEL_BG};
-                border: none;
-            }}
-            QListWidget::item {{ padding: 4px 6px; border-radius: 2px; }}
-            QListWidget::item:selected {{ background-color: #d6eaf8; color: #000; }}
-        """)
-        layout.addWidget(self._kb_list)
+        self._kb_list.setStyleSheet(list_style())
+        left_layout.addWidget(self._kb_list, 1)
 
-        # ---- 分隔 ----
-        layout.addWidget(_h_separator())
+        root.addWidget(left)
 
-        # ---- 文档 ----
-        doc_header = QHBoxLayout()
-        doc_header.addWidget(QLabel("<b>📄 文档</b>"))
-        doc_header.addStretch()
-        btn_upload = QPushButton("📤 上传")
-        btn_upload.clicked.connect(self._upload_document)
-        doc_header.addWidget(btn_upload)
-        layout.addLayout(doc_header)
+        # ==================== 右栏:文档 + 分块预览 ====================
+        right = QWidget()
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
+
+        right_layout.addWidget(SectionHeader(
+            "📄 文档",
+            [("📤 上传", "上传文档到当前知识库", self._upload_document)],
+        ))
 
         self._file_list = FileListWidget()
         self._file_list.doc_delete_requested.connect(self._delete_document)
-        layout.addWidget(self._file_list)
+        self._file_list.currentRowChanged.connect(self._on_doc_selected)
+        right_layout.addWidget(self._file_list, 1)
 
-        # ---- 进度 ----
         self._progress = QProgressBar()
         self._progress.setVisible(False)
-        layout.addWidget(self._progress)
+        right_layout.addWidget(self._progress)
+
+        right_layout.addWidget(h_separator())
+
+        right_layout.addWidget(SectionHeader("🧩 分块预览"))
+
+        self._chunk_scroll = QScrollArea()
+        self._chunk_scroll.setWidgetResizable(True)
+        self._chunk_scroll.setStyleSheet(
+            f"QScrollArea {{ border: none; background-color: {PANEL_BG}; }}"
+        )
+        self._chunk_container = QWidget()
+        self._chunk_layout = QVBoxLayout(self._chunk_container)
+        self._chunk_layout.setContentsMargins(0, 0, 0, 0)
+        self._chunk_layout.setSpacing(0)
+        self._chunk_layout.addStretch()
+        self._chunk_scroll.setWidget(self._chunk_container)
+        right_layout.addWidget(self._chunk_scroll, 2)
+
+        root.addWidget(right, 1)
+
+        # 分块预览占位提示
+        self._show_chunk_placeholder("选择左侧文档以预览分块")
 
     # ------------------------------------------------------------------ #
     #  KB 列表刷新
@@ -121,7 +141,10 @@ class KbPanel(QWidget):
         kbs = self._kb_mgr.list_kbs()
         target_id = select_kb_id if select_kb_id is not None else self._active_kb_id
 
-        self._kb_list.currentRowChanged.disconnect(self._on_kb_clicked)
+        try:
+            self._kb_list.currentRowChanged.disconnect(self._on_kb_clicked)
+        except (TypeError, RuntimeError):
+            pass  # 信号未连接或已断开,忽略(修复旧 bug:裸 disconnect 会抛 TypeError)
         self._kb_list.clear()
 
         for kb in kbs:
@@ -259,6 +282,7 @@ class KbPanel(QWidget):
             self._kb_mgr.delete_kb(self._active_kb_id)
             self._active_kb_id = None
             self._refresh_kb_list()
+            self._show_chunk_placeholder("选择左侧文档以预览分块")
             self.status_message.emit("知识库已删除")
 
     # ------------------------------------------------------------------ #
@@ -305,6 +329,42 @@ class KbPanel(QWidget):
         self._delete_worker.start()
 
     # ------------------------------------------------------------------ #
+    #  分块预览
+    # ------------------------------------------------------------------ #
+
+    def _on_doc_selected(self, row: int) -> None:
+        """文档选中 → 取回其分块并渲染 ChunkCard 列表。"""
+        if row < 0:
+            return
+        item = self._file_list.item(row)
+        if item is None:
+            return
+        doc_id = item.data(Qt.UserRole)
+        try:
+            chunks = self._kb_mgr.get_chunks_for_document(doc_id)
+        except Exception as e:
+            self._show_chunk_placeholder(f"读取分块失败: {e}")
+            return
+
+        clear_layout(self._chunk_layout)
+        if not chunks:
+            self._show_chunk_placeholder("该文档暂无分块数据")
+            return
+        for i, ctx in enumerate(chunks, 1):
+            self._chunk_layout.addWidget(ChunkCard(ctx, index=i))
+        self._chunk_layout.addStretch()
+
+    def _show_chunk_placeholder(self, text: str) -> None:
+        """在分块预览区显示占位提示。"""
+        clear_layout(self._chunk_layout)
+        hint = QLabel(text)
+        hint.setFont(QFont(FONT_FAMILY, FONT_SIZE_SM))
+        hint.setStyleSheet("color: #999;")
+        hint.setAlignment(Qt.AlignCenter)
+        self._chunk_layout.addWidget(hint)
+        self._chunk_layout.addStretch()
+
+    # ------------------------------------------------------------------ #
     #  Worker callbacks
     # ------------------------------------------------------------------ #
 
@@ -324,6 +384,7 @@ class KbPanel(QWidget):
         self.status_message.emit(message)
         self._refresh_docs()
         self._refresh_kb_list()
+        self._show_chunk_placeholder("选择左侧文档以预览分块")
         if not success:
             QMessageBox.warning(self, "删除失败", message)
 
@@ -334,10 +395,3 @@ class KbPanel(QWidget):
     @property
     def active_kb_id(self) -> int | None:
         return self._active_kb_id
-
-
-def _h_separator() -> QWidget:
-    line = QWidget()
-    line.setFixedHeight(1)
-    line.setStyleSheet("background-color: #d0d0d0;")
-    return line

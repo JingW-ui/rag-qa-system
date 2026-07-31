@@ -148,6 +148,35 @@ def tag_style() -> str:
 
 
 # ============================================================
+#  列表 / 分隔线
+# ============================================================
+
+# QListWidget 选中色（知识库/文档列表共用）
+LIST_ITEM_SELECTED_BG = "#d6eaf8"
+SEPARATOR_COLOR = "#d0d0d0"
+
+
+def list_style() -> str:
+    """统一 QListWidget QSS（知识库列表、文档列表共用）。
+
+    取代 kb_panel / file_list_widget 中复制粘贴的内联样式。
+    """
+    return f"""
+        QListWidget {{
+            background-color: {PANEL_BG};
+            border: none;
+        }}
+        QListWidget::item {{ padding: 4px 6px; border-radius: 2px; }}
+        QListWidget::item:selected {{ background-color: {LIST_ITEM_SELECTED_BG}; color: #000; }}
+    """
+
+
+def separator_style() -> str:
+    """水平分隔线 QSS（1px 灰线）。"""
+    return f"background-color: {SEPARATOR_COLOR};"
+
+
+# ============================================================
 #  引用来源卡片
 # ============================================================
 

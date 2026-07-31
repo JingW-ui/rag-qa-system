@@ -101,6 +101,31 @@ class VectorStore:
         except Exception:
             pass  # ID 不存在则忽略
 
+    def get_by_ids(self, collection_name: str, ids: list[str]) -> list[dict]:
+        """按 chroma_id 取回向量文本与元数据（非相似度检索）。
+
+        用于分块预览：distance 不适用，置为 None。
+
+        Returns:
+            [{id, text, metadata, distance: None}, ...]，按 ids 顺序。
+        """
+        if not ids:
+            return []
+        collection = self.get_or_create_collection(collection_name)
+        res = collection.get(ids=ids)
+        items: list[dict] = []
+        cids = res.get("ids", [])
+        docs = res.get("documents") or []
+        metas = res.get("metadatas") or []
+        for i, cid in enumerate(cids):
+            items.append({
+                "id": cid,
+                "text": docs[i] if i < len(docs) else "",
+                "metadata": metas[i] if i < len(metas) else {},
+                "distance": None,
+            })
+        return items
+
     def count(self, collection_name: str) -> int:
         """返回 collection 中的向量数量。"""
         collection = self.get_or_create_collection(collection_name)
