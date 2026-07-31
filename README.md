@@ -1,5 +1,4 @@
-# RAG_H
-
+![banner](assets/banner.jpg)
 基于 PySide6 + ChromaDB + 阿里云 MaaS 的本地 RAG 知识库问答桌面应用。
 
 ## ✨ 功能
