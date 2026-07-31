@@ -177,6 +177,156 @@ def separator_style() -> str:
 
 
 # ============================================================
+#  按钮
+# ============================================================
+
+BTN_COLOR = "#666666"
+BTN_COLOR_HOVER = "#333333"
+BTN_HOVER_BG = "rgba(0,0,0,0.06)"
+BTN_PRESSED_BG = "rgba(0,0,0,0.10)"
+BTN_DISABLED_COLOR = "#AAAAAA"
+BTN_RADIUS = 6
+BTN_PADDING_V = 5
+BTN_PADDING_H = 10
+
+
+def button_style() -> str:
+    """统一文字按钮 QSS — 透明底、无边框、hover 浅灰,扁平低存在感。
+
+    用于 SectionHeader 动作按钮与设置页等裸 QPushButton,取代原生 Windows 方按钮。
+    聊天发送/附件按钮有内联样式,不受影响。
+    """
+    return f"""
+        QPushButton {{
+            background-color: transparent;
+            border: none;
+            border-radius: {BTN_RADIUS}px;
+            padding: {BTN_PADDING_V}px {BTN_PADDING_H}px;
+            color: {BTN_COLOR};
+        }}
+        QPushButton:hover {{
+            background-color: {BTN_HOVER_BG};
+            color: {BTN_COLOR_HOVER};
+        }}
+        QPushButton:pressed {{
+            background-color: {BTN_PRESSED_BG};
+        }}
+        QPushButton:disabled {{
+            color: {BTN_DISABLED_COLOR};
+        }}
+    """
+
+
+# ============================================================
+#  Tab / 表格 / 分组框
+# ============================================================
+
+TAB_COLOR = "#888888"
+TAB_COLOR_HOVER = "#555555"
+TAB_COLOR_SELECTED = "#2a7ab5"
+TAB_INDICATOR = "#4a90d9"
+TAB_HOVER_UNDERLINE = "#D0D0D0"
+
+TABLE_BG = "#FFFFFF"
+TABLE_RADIUS = 6
+TABLE_ITEM_PADDING_V = 6
+TABLE_ITEM_PADDING_H = 8
+TABLE_HEADER_BG = "#F7F7F7"
+TABLE_HEADER_COLOR = "#555555"
+
+GROUPBOX_RADIUS = 6
+GROUPBOX_TITLE_COLOR = "#666666"
+
+
+def tab_style() -> str:
+    """QTabWidget 扁平下划线指示器样式 — 取代原生大块灰 Tab。"""
+    return f"""
+        QTabWidget::pane {{
+            border: none;
+            background: transparent;
+        }}
+        QTabBar::tab {{
+            background: transparent;
+            border: none;
+            border-bottom: 2px solid transparent;
+            padding: 8px 16px;
+            margin: 0;
+            color: {TAB_COLOR};
+        }}
+        QTabBar::tab:selected {{
+            color: {TAB_COLOR_SELECTED};
+            border-bottom: 2px solid {TAB_INDICATOR};
+        }}
+        QTabBar::tab:hover:!selected {{
+            color: {TAB_COLOR_HOVER};
+            border-bottom: 2px solid {TAB_HOVER_UNDERLINE};
+        }}
+    """
+
+
+def table_style() -> str:
+    """QTableWidget 扁平无网格样式 — 发丝边框、浅灰表头、选中浅蓝。
+
+    配合 table.setShowGrid(False) + verticalHeader().setVisible(False) 使用。
+    """
+    return f"""
+        QTableWidget {{
+            background-color: {TABLE_BG};
+            border: 1px solid {SURFACE_BORDER};
+            border-radius: {TABLE_RADIUS}px;
+            gridline-color: transparent;
+            outline: none;
+        }}
+        QTableWidget::item {{
+            padding: {TABLE_ITEM_PADDING_V}px {TABLE_ITEM_PADDING_H}px;
+            border: none;
+        }}
+        QTableWidget::item:selected {{
+            background-color: {LIST_ITEM_SELECTED_BG};
+            color: #000;
+        }}
+        QHeaderView::section {{
+            background-color: {TABLE_HEADER_BG};
+            color: {TABLE_HEADER_COLOR};
+            border: none;
+            border-bottom: 1px solid {SURFACE_BORDER};
+            padding: {TABLE_ITEM_PADDING_V}px {TABLE_ITEM_PADDING_H}px;
+            font-weight: normal;
+        }}
+        QTableCornerButton::section {{
+            background-color: {TABLE_HEADER_BG};
+            border: none;
+        }}
+    """
+
+
+def groupbox_style() -> str:
+    """QGroupBox 柔化样式 — 发丝圆角边框 + 顶部标题,取代原生粗框。
+
+    标题背景填 PANEL_BG 以"打断"顶部边框线,与页面浅灰底融合。
+    """
+    return f"""
+        QGroupBox {{
+            background: transparent;
+            border: 1px solid {SURFACE_BORDER};
+            border-radius: {GROUPBOX_RADIUS}px;
+            margin-top: 12px;
+            padding-top: 10px;
+            font-weight: normal;
+            color: {GROUPBOX_TITLE_COLOR};
+        }}
+        QGroupBox::title {{
+            subcontrol-origin: margin;
+            subcontrol-position: top left;
+            left: 10px;
+            padding: 0 4px;
+            background-color: {PANEL_BG};
+            color: {GROUPBOX_TITLE_COLOR};
+        }}
+    """
+
+
+# ============================================================
 #  引用来源卡片
 # ============================================================
 

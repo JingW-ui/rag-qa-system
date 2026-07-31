@@ -19,6 +19,7 @@ from PySide6.QtCore import Qt, Signal
 
 from app.core.config import ConfigManager
 from app.core.model_registry import ModelRegistry
+from app.ui.theme import button_style, tab_style, table_style, groupbox_style
 
 
 PROVIDER_TYPES = ["openai_compatible", "ollama"]
@@ -51,6 +52,7 @@ class SettingsPage(QWidget):
 
     def _setup_ui(self) -> None:
         layout = QVBoxLayout(self)
+        self.setStyleSheet("\n".join([tab_style(), table_style(), groupbox_style()]))
 
         self._tabs = QTabWidget()
         self._setup_providers_tab()
@@ -62,8 +64,10 @@ class SettingsPage(QWidget):
         btn_bar = QHBoxLayout()
         btn_bar.addStretch()
         self._save_btn = QPushButton("💾 保存")
+        self._save_btn.setStyleSheet(button_style())
         self._save_btn.clicked.connect(self._save)
         self._reset_btn = QPushButton("↺ 重置")
+        self._reset_btn.setStyleSheet(button_style())
         self._reset_btn.clicked.connect(self._reset)
         btn_bar.addWidget(self._reset_btn)
         btn_bar.addWidget(self._save_btn)
@@ -86,9 +90,11 @@ class SettingsPage(QWidget):
 
         btn_row = QHBoxLayout()
         btn_add = QPushButton("+ 添加")
+        btn_add.setStyleSheet(button_style())
         btn_add.clicked.connect(self._add_provider)
         btn_row.addWidget(btn_add)
         btn_del = QPushButton("- 删除")
+        btn_del.setStyleSheet(button_style())
         btn_del.clicked.connect(self._delete_provider)
         btn_row.addWidget(btn_del)
         left.addLayout(btn_row)
@@ -120,8 +126,10 @@ class SettingsPage(QWidget):
         self._chat_model_table = QTableWidget(0, 4)
         self._chat_model_table.setHorizontalHeaderLabels(["模型名", "显示名", "视觉", "默认"])
         self._chat_model_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self._apply_table_props(self._chat_model_table)
         chat_layout.addWidget(self._chat_model_table)
         btn_add_chat = QPushButton("+ 添加聊天模型")
+        btn_add_chat.setStyleSheet(button_style())
         btn_add_chat.clicked.connect(lambda: self._add_model_row(self._chat_model_table, is_chat=True))
         chat_layout.addWidget(btn_add_chat)
         right.addRow(chat_group)
@@ -132,8 +140,10 @@ class SettingsPage(QWidget):
         self._emb_model_table = QTableWidget(0, 4)
         self._emb_model_table.setHorizontalHeaderLabels(["模型名", "显示名", "维度", "默认"])
         self._emb_model_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self._apply_table_props(self._emb_model_table)
         emb_layout.addWidget(self._emb_model_table)
         btn_add_emb = QPushButton("+ 添加 Embedding 模型")
+        btn_add_emb.setStyleSheet(button_style())
         btn_add_emb.clicked.connect(lambda: self._add_model_row(self._emb_model_table, is_chat=False))
         emb_layout.addWidget(btn_add_emb)
         right.addRow(emb_group)
@@ -144,8 +154,10 @@ class SettingsPage(QWidget):
         self._rerank_model_table = QTableWidget(0, 3)
         self._rerank_model_table.setHorizontalHeaderLabels(["模型名", "显示名", "默认"])
         self._rerank_model_table.horizontalHeader().setSectionResizeMode(QHeaderView.Stretch)
+        self._apply_table_props(self._rerank_model_table)
         rerank_layout.addWidget(self._rerank_model_table)
         btn_add_rerank = QPushButton("+ 添加 Rerank 模型")
+        btn_add_rerank.setStyleSheet(button_style())
         btn_add_rerank.clicked.connect(lambda: self._add_rerank_model_row(self._rerank_model_table))
         rerank_layout.addWidget(btn_add_rerank)
         right.addRow(rerank_group)
@@ -203,6 +215,7 @@ class SettingsPage(QWidget):
 
         # Test Connection
         btn_test = QPushButton("🔌 测试当前连接")
+        btn_test.setStyleSheet(button_style())
         btn_test.clicked.connect(self._test_connection)
         layout.addRow(btn_test)
 
@@ -596,6 +609,11 @@ class SettingsPage(QWidget):
     # ------------------------------------------------------------------ #
     #  Helpers
     # ------------------------------------------------------------------ #
+
+    def _apply_table_props(self, table: QTableWidget) -> None:
+        """表格扁平化的非 QSS 属性:去网格、隐藏行号。"""
+        table.setShowGrid(False)
+        table.verticalHeader().setVisible(False)
 
     def _find_provider(self, prov_id: str) -> dict | None:
         for p in self._data.get("model_providers", []):

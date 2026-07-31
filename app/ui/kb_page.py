@@ -1,8 +1,9 @@
 # -*- coding: utf-8 -*-
 """
-知识库页 — 左 KB 列表 + 右文档列表(含分块预览),对话关联 + 右键菜单。
+知识库页 — 左栏 KB 列表 + 文档列表,右栏分块预览,对话关联 + 右键菜单。
 
-由 kb_panel.py 重构:单列堆叠 → 两栏,新增 ChunkCard 分块预览。
+左导航 + 右内容的 master-detail 结构:左栏自上而下放 KB 列表(限高)与文档列表,
+中间水平 QSplitter 可拖拽列宽,右栏整列给分块预览。
 保留全部 KB/文档 CRUD、IngestWorker/DeleteWorker、对话关联、右键菜单逻辑。
 """
 
@@ -12,7 +13,7 @@ from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel,
     QInputDialog, QMessageBox, QFileDialog, QProgressBar,
     QListWidget, QListWidgetItem, QAbstractItemView,
-    QScrollArea,
+    QScrollArea, QSplitter,
 )
 from PySide6.QtCore import Qt, Signal
 from PySide6.QtGui import QFont
@@ -31,7 +32,7 @@ from app.ui.widgets.simple_menu import SimpleMenu
 
 
 class KbPage(QWidget):
-    """知识库页 — 两栏:KB 列表 + 文档列表/分块预览。"""
+    """知识库页 — 左栏 KB+文档 / 右栏分块预览,水平 QSplitter 可拖拽列宽。"""
 
     kb_changed = Signal(int, str)                # kb_id, collection_name (选中浏览)
     chat_kbs_changed = Signal(list, list)         # ([collection_names], [kb_names])
@@ -66,12 +67,13 @@ class KbPage(QWidget):
 
         root = QHBoxLayout(self)
         root.setContentsMargins(6, 6, 6, 6)
-        root.setSpacing(6)
+        root.setSpacing(0)
 
-        # ==================== 左栏:KB 列表 ====================
+        splitter = QSplitter(Qt.Horizontal)
+
+        # ==================== 左栏:KB 列表 + 文档列表 ====================
         left = QWidget()
         left.setMinimumWidth(260)
-        left.setMaximumWidth(400)
         left_layout = QVBoxLayout(left)
         left_layout.setContentsMargins(0, 0, 0, 0)
 
@@ -87,17 +89,13 @@ class KbPage(QWidget):
         self._kb_list.currentRowChanged.connect(self._on_kb_clicked)
         self._kb_list.itemDoubleClicked.connect(self._on_kb_double_clicked)
         self._kb_list.setSelectionMode(QAbstractItemView.SingleSelection)
+        self._kb_list.setMaximumHeight(220)
         self._kb_list.setStyleSheet(list_style())
-        left_layout.addWidget(self._kb_list, 1)
+        left_layout.addWidget(self._kb_list, 0)
 
-        root.addWidget(left)
+        left_layout.addWidget(h_separator())
 
-        # ==================== 右栏:文档 + 分块预览 ====================
-        right = QWidget()
-        right_layout = QVBoxLayout(right)
-        right_layout.setContentsMargins(0, 0, 0, 0)
-
-        right_layout.addWidget(SectionHeader(
+        left_layout.addWidget(SectionHeader(
             "📄 文档",
             [("📤 上传", "上传文档到当前知识库", self._upload_document)],
         ))
@@ -105,13 +103,19 @@ class KbPage(QWidget):
         self._file_list = FileListWidget()
         self._file_list.doc_delete_requested.connect(self._delete_document)
         self._file_list.currentRowChanged.connect(self._on_doc_selected)
-        right_layout.addWidget(self._file_list, 1)
+        left_layout.addWidget(self._file_list, 1)
 
         self._progress = QProgressBar()
         self._progress.setVisible(False)
-        right_layout.addWidget(self._progress)
+        left_layout.addWidget(self._progress)
 
-        right_layout.addWidget(h_separator())
+        splitter.addWidget(left)
+
+        # ==================== 右栏:分块预览 ====================
+        right = QWidget()
+        right.setMinimumWidth(360)
+        right_layout = QVBoxLayout(right)
+        right_layout.setContentsMargins(0, 0, 0, 0)
 
         right_layout.addWidget(SectionHeader("🧩 分块预览"))
 
@@ -126,9 +130,13 @@ class KbPage(QWidget):
         self._chunk_layout.setSpacing(0)
         self._chunk_layout.addStretch()
         self._chunk_scroll.setWidget(self._chunk_container)
-        right_layout.addWidget(self._chunk_scroll, 2)
+        right_layout.addWidget(self._chunk_scroll, 1)
 
-        root.addWidget(right, 1)
+        splitter.addWidget(right)
+
+        splitter.setSizes([340, 820])
+        splitter.setStretchFactor(1, 1)
+        root.addWidget(splitter)
 
         # 分块预览占位提示
         self._show_chunk_placeholder("选择左侧文档以预览分块")

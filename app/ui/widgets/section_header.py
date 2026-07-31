@@ -13,7 +13,7 @@ from PySide6.QtWidgets import (
 from PySide6.QtGui import QFont
 from PySide6.QtCore import Qt
 
-from app.ui.theme import FONT_FAMILY, FONT_SIZE_NORMAL, separator_style
+from app.ui.theme import FONT_FAMILY, FONT_SIZE_NORMAL, separator_style, button_style
 
 
 class SectionHeader(QWidget):
@@ -56,6 +56,7 @@ class SectionHeader(QWidget):
             btn = QPushButton(text)
             btn.setToolTip(tip)
             btn.setCursor(Qt.PointingHandCursor)
+            btn.setStyleSheet(button_style())
             btn.clicked.connect(on_clicked)
             layout.addWidget(btn)
             self._buttons.append(btn)
